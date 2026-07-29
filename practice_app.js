@@ -11,11 +11,12 @@
   // Application State
   let practiceState = {
     answered: {}, // { [qId]: { userAns, isCorrect, timestamp } }
-    currentCategory: 'single', // 'single', 'multiple', 'tf'
+    currentCategory: 'single', // 'single', 'multiple', 'tf', 'wrong'
     categoryPositions: {
       single: 0,
       multiple: 0,
-      tf: 0
+      tf: 0,
+      wrong: 0
     },
     cloudSyncKey: ''
   };
@@ -74,8 +75,9 @@
   const btnExportCode = document.getElementById('btnExportCode');
   const btnImportCode = document.getElementById('btnImportCode');
 
-  // Multi-choice temporary selected options
+  // Multi-choice temporary selected options & wrong review session state
   let tempMultiSelected = [];
+  let wrongReviewAnswered = {};
 
   // Initialize
   init();
@@ -123,6 +125,47 @@
     localStorage.setItem(STORAGE_KEY, JSON.stringify(practiceState));
   }
 
+  function isQuestionInWrongSet(q, rec) {
+    if (!rec) return false;
+    if (typeof rec.inWrongSet === 'boolean') {
+      return rec.inWrongSet;
+    }
+    // Fallback for legacy records
+    if (q.category === 'multiple') {
+      const status = getMultiChoiceResultStatus(q, rec);
+      return status === 'missed' || status === 'wrong';
+    } else {
+      return !rec.isCorrect;
+    }
+  }
+
+  function getQuestionWrongCount(q, rec) {
+    if (!rec) return 0;
+    if (typeof rec.wrongCount === 'number') {
+      return rec.wrongCount;
+    }
+    return isQuestionInWrongSet(q, rec) ? 1 : 0;
+  }
+
+  function getWrongQuestionsList() {
+    const rawBank = window.QUESTION_BANK || [];
+    const wrongList = rawBank.filter(q => {
+      const rec = practiceState.answered[q.id];
+      return isQuestionInWrongSet(q, rec);
+    });
+
+    // 错题集练习模式：按收录时间顺序（从最早到最近）排序
+    wrongList.sort((a, b) => {
+      const recA = practiceState.answered[a.id];
+      const recB = practiceState.answered[b.id];
+      const timeA = recA && recA.timestamp ? recA.timestamp : 0;
+      const timeB = recB && recB.timestamp ? recB.timestamp : 0;
+      return timeA - timeB;
+    });
+
+    return wrongList;
+  }
+
   function switchCategory(category) {
     practiceState.currentCategory = category;
     
@@ -132,9 +175,13 @@
     } else if (category === 'multiple') {
       currentList = bankMultiple;
       catTag.textContent = '多选题';
-    } else {
+    } else if (category === 'tf') {
       currentList = bankTF;
       catTag.textContent = '判断题';
+    } else if (category === 'wrong') {
+      wrongReviewAnswered = {}; // Clear previous session answers so questions present clean for new practice
+      currentList = getWrongQuestionsList();
+      catTag.textContent = '错题集练习';
     }
 
     currentIndex = practiceState.categoryPositions[category] || 0;
@@ -156,6 +203,16 @@
 
   function populateJumpSelect() {
     jumpSelect.innerHTML = '';
+
+    if (!currentList || currentList.length === 0) {
+      const opt = document.createElement('option');
+      opt.value = 0;
+      opt.textContent = '暂无错题记录';
+      jumpSelect.appendChild(opt);
+      jumpSelect.value = 0;
+      return;
+    }
+
     currentList.forEach((q, idx) => {
       const opt = document.createElement('option');
       opt.value = idx;
@@ -173,7 +230,18 @@
         }
       }
 
-      opt.textContent = `第 ${idx + 1} 题 (全库${q.id}题)${statusSymbol}`;
+      if (practiceState.currentCategory === 'wrong') {
+        let typeStr = q.category === 'single' ? '单选' : (q.category === 'multiple' ? '多选' : '判断');
+        if (q.category === 'multiple') {
+          const status = getMultiChoiceResultStatus(q, record);
+          if (status === 'missed') typeStr = '多选漏选';
+          else typeStr = '多选错选';
+        }
+        const wCount = getQuestionWrongCount(q, record);
+        opt.textContent = `第 ${idx + 1} 题 [${typeStr}] (全库${q.id}题·已错${wCount}次)${statusSymbol}`;
+      } else {
+        opt.textContent = `第 ${idx + 1} 题 (全库${q.id}题)${statusSymbol}`;
+      }
       jumpSelect.appendChild(opt);
     });
     jumpSelect.value = currentIndex;
@@ -223,6 +291,31 @@
   }
 
   function renderCurrentQuestion() {
+    if (practiceState.currentCategory === 'wrong' && (!currentList || currentList.length === 0)) {
+      indexTag.textContent = '第 0 / 0 题';
+      globalIndexTag.textContent = '全库 0 错题';
+      catTag.textContent = '错题集练习';
+      const wrongCountTag = document.getElementById('wrongCountTag');
+      if (wrongCountTag) wrongCountTag.style.display = 'none';
+      const wrongModeTag = document.getElementById('wrongModeTag');
+      if (wrongModeTag) wrongModeTag.style.display = 'none';
+
+      pTitle.innerHTML = `
+        <div style="text-align: center; padding: 40px 20px;">
+          <i class="fa-solid fa-circle-check" style="font-size: 3.5rem; color: var(--success); margin-bottom: 16px;"></i>
+          <h3 style="font-size: 1.25rem; font-weight: 700; color: var(--text-main);">🎉 太棒了！您当前没有错题</h3>
+          <p style="font-size: 0.9rem; color: var(--text-muted); margin-top: 8px;">包含单选、多选（含漏选题）与判断题在内的所有已练题目均回答正确！</p>
+        </div>
+      `;
+      pOptionsContainer.innerHTML = '';
+      feedbackBanner.style.display = 'none';
+      multiSubmitWrapper.style.display = 'none';
+      btnPrevP.disabled = true;
+      btnNextP.disabled = true;
+      updateAllProgressDisplays();
+      return;
+    }
+
     if (!currentList || currentList.length === 0) return;
 
     const q = currentList[currentIndex];
@@ -231,6 +324,12 @@
 
     indexTag.textContent = `第 ${currentIndex + 1} / ${currentList.length} 题`;
     globalIndexTag.textContent = `全库第 ${q.id} 题`;
+
+    if (practiceState.currentCategory === 'wrong') {
+      const typeLabel = q.category === 'single' ? '错题·单选' : (q.category === 'multiple' ? '错题·多选' : '错题·判断');
+      catTag.textContent = typeLabel;
+    }
+
     jumpSelect.value = currentIndex;
 
     pTitle.textContent = `${currentIndex + 1}. ${q.prompt}`;
@@ -239,14 +338,44 @@
     multiSubmitWrapper.style.display = 'none';
 
     const record = practiceState.answered[q.id];
-    const isAnswered = !!record;
+    const isWrongCategory = practiceState.currentCategory === 'wrong';
+
+    // In wrong category review mode, present options clean (unanswered) until user submits an answer in this review session
+    let recordForRender = record;
+    if (isWrongCategory && !wrongReviewAnswered[q.id]) {
+      recordForRender = null;
+    }
+
+    const isAnswered = !!recordForRender;
+
+    // Update Wrong Count Tag & Wrong Mode Tag
+    const wrongCountTag = document.getElementById('wrongCountTag');
+    const wrongModeTag = document.getElementById('wrongModeTag');
+    const wrongCount = getQuestionWrongCount(q, record);
+    
+    if (wrongCountTag) {
+      if (wrongCount > 0) {
+        wrongCountTag.style.display = 'inline-flex';
+        wrongCountTag.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> 累计做错 ${wrongCount} 次`;
+      } else {
+        wrongCountTag.style.display = 'none';
+      }
+    }
+
+    if (wrongModeTag) {
+      if (practiceState.currentCategory === 'wrong') {
+        wrongModeTag.style.display = 'inline-flex';
+      } else {
+        wrongModeTag.style.display = 'none';
+      }
+    }
 
     if (q.category === 'tf') {
-      renderTFOptions(q, record);
+      renderTFOptions(q, recordForRender);
     } else if (q.category === 'single') {
-      renderSingleOptions(q, record);
+      renderSingleOptions(q, recordForRender);
     } else if (q.category === 'multiple') {
-      renderMultipleOptions(q, record);
+      renderMultipleOptions(q, recordForRender);
     }
 
     if (isAnswered) {
@@ -365,6 +494,7 @@
 
   function submitAnswer(q, userAns) {
     let isCorrect = false;
+    let status = 'wrong';
 
     if (q.category === 'multiple') {
       const correctSet = new Set(Array.isArray(q.answer) ? q.answer : [q.answer]);
@@ -377,15 +507,34 @@
         }
       }
       isCorrect = equals;
+
+      const tempRec = { userAns, isCorrect };
+      status = getMultiChoiceResultStatus(q, tempRec);
     } else {
       isCorrect = userAns === q.answer;
+      status = isCorrect ? 'correct' : 'wrong';
     }
+
+    const prevRec = practiceState.answered[q.id];
+    const prevWrongCount = getQuestionWrongCount(q, prevRec);
+
+    const isAttemptWrong = (status !== 'correct');
+    const newWrongCount = isAttemptWrong ? prevWrongCount + 1 : prevWrongCount;
+    // If user gets it 100% correct, inWrongSet becomes false (automatically removed from wrong set!)
+    const inWrongSet = isAttemptWrong;
 
     practiceState.answered[q.id] = {
       userAns: userAns,
       isCorrect: isCorrect,
+      status: status,
+      wrongCount: newWrongCount,
+      inWrongSet: inWrongSet,
       timestamp: Date.now()
     };
+
+    if (practiceState.currentCategory === 'wrong') {
+      wrongReviewAnswered[q.id] = true;
+    }
 
     saveState();
     populateJumpSelect();
@@ -401,26 +550,35 @@
 
     const userAnsStr = Array.isArray(record.userAns) ? record.userAns.join(', ') : (record.userAns || '未作答');
     const correctAnsStr = Array.isArray(q.answer) ? q.answer.join(', ') : q.answer;
+    const wrongCount = getQuestionWrongCount(q, record);
 
     if (q.category === 'multiple') {
       const status = getMultiChoiceResultStatus(q, record);
       if (status === 'correct') {
         feedbackBanner.className = 'feedback-banner correct';
-        feedbackStatusRow.innerHTML = '<i class="fa-solid fa-circle-check"></i> 恭喜您，回答正确！（所有选项均选对）';
+        if (wrongCount > 0) {
+          feedbackStatusRow.innerHTML = '<i class="fa-solid fa-circle-check"></i> 恭喜您，回答正确！（已从错题集中自动移除 🎉）';
+        } else {
+          feedbackStatusRow.innerHTML = '<i class="fa-solid fa-circle-check"></i> 恭喜您，回答正确！（所有选项均选对）';
+        }
       } else if (status === 'missed') {
         feedbackBanner.className = 'feedback-banner missed';
-        feedbackStatusRow.innerHTML = '<i class="fa-solid fa-circle-minus"></i> 漏选（选对了部分选项，未选错项）';
+        feedbackStatusRow.innerHTML = `<i class="fa-solid fa-circle-minus"></i> 漏选（选对了部分选项，未选错项 · 累计错 ${wrongCount} 次，保留在错题集中）`;
       } else {
         feedbackBanner.className = 'feedback-banner wrong';
-        feedbackStatusRow.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> 回答错误（选到了错误的选项）';
+        feedbackStatusRow.innerHTML = `<i class="fa-solid fa-circle-xmark"></i> 回答错误（选到了错误的选项 · 累计错 ${wrongCount} 次，保留在错题集中）`;
       }
     } else {
       if (record.isCorrect) {
         feedbackBanner.className = 'feedback-banner correct';
-        feedbackStatusRow.innerHTML = '<i class="fa-solid fa-circle-check"></i> 恭喜您，回答正确！';
+        if (wrongCount > 0) {
+          feedbackStatusRow.innerHTML = '<i class="fa-solid fa-circle-check"></i> 恭喜您，回答正确！（已从错题集中自动移除 🎉）';
+        } else {
+          feedbackStatusRow.innerHTML = '<i class="fa-solid fa-circle-check"></i> 恭喜您，回答正确！';
+        }
       } else {
         feedbackBanner.className = 'feedback-banner wrong';
-        feedbackStatusRow.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> 回答错误';
+        feedbackStatusRow.innerHTML = `<i class="fa-solid fa-circle-xmark"></i> 回答错误（已累计错 ${wrongCount} 次，保留在错题集中）`;
       }
     }
 
@@ -504,8 +662,23 @@
     if (tfCorrectEl) tfCorrectEl.textContent = `${tfCorrectCount} (${tfCorrectPct}%)`;
     if (tfWrongEl) tfWrongEl.textContent = `${tfWrongCount} (${tfWrongPct}%)`;
 
-    // Overall Progress & Accuracy
+    // Wrong Questions Tab Stats (错题集)
+    const wrongList = getWrongQuestionsList();
+    const wrongCount = wrongList.length;
     const totalAnsCount = Object.keys(practiceState.answered).length;
+    const wrongPct = totalAnsCount > 0 ? ((wrongCount / totalAnsCount) * 100).toFixed(1) : '0.0';
+
+    const wrongTotalCountEl = document.getElementById('wrongTotalCount');
+    const wrongMetaPctEl = document.getElementById('wrongMetaPct');
+    const wrongBadgeTextEl = document.getElementById('wrongBadgeText');
+    const wrongFillEl = document.getElementById('wrongFill');
+
+    if (wrongTotalCountEl) wrongTotalCountEl.textContent = wrongCount;
+    if (wrongMetaPctEl) wrongMetaPctEl.textContent = `${wrongPct}%`;
+    if (wrongBadgeTextEl) wrongBadgeTextEl.textContent = `${wrongCount} 题`;
+    if (wrongFillEl) wrongFillEl.style.width = `${Math.min(wrongPct, 100)}%`;
+
+    // Overall Progress & Accuracy
     const totalPct = ((totalAnsCount / 1000) * 100).toFixed(1);
     totalProgressText.textContent = `${totalAnsCount} / 1000 (${totalPct}%)`;
 
@@ -546,7 +719,7 @@
     if (incoming.isReset && Object.keys(incoming.answered || {}).length === 0) {
       if (confirm('⚠️ 检测到导入的暗号为【清空/重置进度】指令！\n确定要将本设备的练习进度也同步清空重置吗？')) {
         practiceState.answered = {};
-        practiceState.categoryPositions = { single: 0, multiple: 0, tf: 0 };
+        practiceState.categoryPositions = { single: 0, multiple: 0, tf: 0, wrong: 0 };
         saveState();
         switchCategory('single');
         updateAllProgressDisplays();
@@ -678,6 +851,7 @@
     btnReAnswer.addEventListener('click', () => {
       const q = currentList[currentIndex];
       delete practiceState.answered[q.id];
+      delete wrongReviewAnswered[q.id];
       saveState();
       populateJumpSelect();
       renderCurrentQuestion();
@@ -693,9 +867,9 @@
     });
 
     btnResetProgress.addEventListener('click', () => {
-      if (confirm('确定要清空所有练习进度和作答记录吗？此操作无法撤销。')) {
+      if (confirm('确定要清空所有练习进度、错题集与作答记录吗？此操作无法撤销。')) {
         practiceState.answered = {};
-        practiceState.categoryPositions = { single: 0, multiple: 0, tf: 0 };
+        practiceState.categoryPositions = { single: 0, multiple: 0, tf: 0, wrong: 0 };
         saveState();
         switchCategory('single');
         updateAllProgressDisplays();

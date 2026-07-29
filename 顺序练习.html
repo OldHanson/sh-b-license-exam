@@ -116,6 +116,22 @@
               </span>
             </div>
           </button>
+
+          <button class="cat-tab-btn" data-cat="wrong">
+            <div class="tab-header">
+              <i class="fa-solid fa-triangle-exclamation" style="color: #ef4444;"></i>
+              <span>错题集板块 (<span id="wrongTotalCount">0</span>题)</span>
+            </div>
+            <div class="tab-progress-bar">
+              <div class="fill" id="wrongFill" style="width: 0%; background-color: var(--danger);"></div>
+            </div>
+            <div class="tab-meta" id="wrongMeta">包含做错与漏选题 (<span id="wrongMetaPct">0.0%</span>)</div>
+            <div class="tab-stats-breakdown" id="wrongStatsBreakdown">
+              <span class="stat-badge stat-wrong" title="做错与漏选题总数">
+                <i class="fa-solid fa-circle-xmark"></i> 错题数 <strong id="wrongBadgeText">0 题</strong>
+              </span>
+            </div>
+          </button>
         </div>
       </section>
 
@@ -129,6 +145,8 @@
               <span class="tag-cat" id="catTag">单选题</span>
               <span class="tag-index" id="indexTag">第 1 / 400 题</span>
               <span class="tag-global" id="globalIndexTag">全库第 1 题</span>
+              <span class="tag-wrong-count" id="wrongCountTag" style="display: none;"><i class="fa-solid fa-triangle-exclamation"></i> 已错 0 次</span>
+              <span class="tag-wrong-mode" id="wrongModeTag" style="display: none;"><i class="fa-solid fa-clock-rotate-left"></i> 错题模式 (最早→最新)</span>
             </div>
 
             <div class="right-jump">
