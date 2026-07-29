@@ -163,13 +163,63 @@
       const record = practiceState.answered[q.id];
       let statusSymbol = '';
       if (record) {
-        statusSymbol = record.isCorrect ? ' ✓' : ' ✗';
+        if (q.category === 'multiple') {
+          const status = getMultiChoiceResultStatus(q, record);
+          if (status === 'correct') statusSymbol = ' ✓';
+          else if (status === 'missed') statusSymbol = ' ➖';
+          else statusSymbol = ' ✗';
+        } else {
+          statusSymbol = record.isCorrect ? ' ✓' : ' ✗';
+        }
       }
 
       opt.textContent = `第 ${idx + 1} 题 (全库${q.id}题)${statusSymbol}`;
       jumpSelect.appendChild(opt);
     });
     jumpSelect.value = currentIndex;
+  }
+
+  /**
+   * Helper to evaluate a multiple-choice question answer state:
+   * - 'correct': All correct options selected, no wrong options selected (所有选项都选对)
+   * - 'missed': Non-empty subset of correct options selected, no wrong options selected (选对其中若干个选项)
+   * - 'wrong': At least one wrong option selected (选到了错误的选项)
+   */
+  function getMultiChoiceResultStatus(q, record) {
+    if (!record || !record.userAns) return null;
+
+    const correctArr = Array.isArray(q.answer)
+      ? q.answer
+      : (typeof q.answer === 'string' ? q.answer.split('') : []);
+    const userArr = Array.isArray(record.userAns)
+      ? record.userAns
+      : (typeof record.userAns === 'string' ? record.userAns.split('') : []);
+
+    const correctSet = new Set(correctArr);
+    const userSet = new Set(userArr);
+
+    if (userSet.size === 0) return null;
+
+    let hasWrongChoice = false;
+    let correctChoiceCount = 0;
+
+    for (let opt of userSet) {
+      if (correctSet.has(opt)) {
+        correctChoiceCount++;
+      } else {
+        hasWrongChoice = true;
+      }
+    }
+
+    if (hasWrongChoice) {
+      return 'wrong';
+    } else if (correctChoiceCount === correctSet.size && userSet.size === correctSet.size) {
+      return 'correct';
+    } else if (correctChoiceCount > 0 && correctChoiceCount < correctSet.size) {
+      return 'missed';
+    }
+
+    return 'wrong';
   }
 
   function renderCurrentQuestion() {
@@ -352,12 +402,26 @@
     const userAnsStr = Array.isArray(record.userAns) ? record.userAns.join(', ') : (record.userAns || '未作答');
     const correctAnsStr = Array.isArray(q.answer) ? q.answer.join(', ') : q.answer;
 
-    if (record.isCorrect) {
-      feedbackBanner.className = 'feedback-banner correct';
-      feedbackStatusRow.innerHTML = '<i class="fa-solid fa-circle-check"></i> 恭喜您，回答正确！';
+    if (q.category === 'multiple') {
+      const status = getMultiChoiceResultStatus(q, record);
+      if (status === 'correct') {
+        feedbackBanner.className = 'feedback-banner correct';
+        feedbackStatusRow.innerHTML = '<i class="fa-solid fa-circle-check"></i> 恭喜您，回答正确！（所有选项均选对）';
+      } else if (status === 'missed') {
+        feedbackBanner.className = 'feedback-banner missed';
+        feedbackStatusRow.innerHTML = '<i class="fa-solid fa-circle-minus"></i> 漏选（选对了部分选项，未选错项）';
+      } else {
+        feedbackBanner.className = 'feedback-banner wrong';
+        feedbackStatusRow.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> 回答错误（选到了错误的选项）';
+      }
     } else {
-      feedbackBanner.className = 'feedback-banner wrong';
-      feedbackStatusRow.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> 回答错误';
+      if (record.isCorrect) {
+        feedbackBanner.className = 'feedback-banner correct';
+        feedbackStatusRow.innerHTML = '<i class="fa-solid fa-circle-check"></i> 恭喜您，回答正确！';
+      } else {
+        feedbackBanner.className = 'feedback-banner wrong';
+        feedbackStatusRow.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> 回答错误';
+      }
     }
 
     userAnsVal.textContent = userAnsStr;
@@ -365,21 +429,82 @@
   }
 
   function updateAllProgressDisplays() {
+    // Single Choice Tab Stats
     const singleAnsCount = bankSingle.filter(q => practiceState.answered[q.id]).length;
     const singlePct = ((singleAnsCount / 400) * 100).toFixed(1);
     singleFill.style.width = `${singlePct}%`;
     singleMeta.textContent = `已练 ${singleAnsCount} / 400 (${singlePct}%)`;
 
+    let singleCorrectCount = 0;
+    let singleWrongCount = 0;
+    bankSingle.forEach(q => {
+      const rec = practiceState.answered[q.id];
+      if (rec) {
+        if (rec.isCorrect) singleCorrectCount++;
+        else singleWrongCount++;
+      }
+    });
+    const singleCorrectPct = singleAnsCount > 0 ? ((singleCorrectCount / singleAnsCount) * 100).toFixed(1) : '0.0';
+    const singleWrongPct = singleAnsCount > 0 ? ((singleWrongCount / singleAnsCount) * 100).toFixed(1) : '0.0';
+    const singleCorrectEl = document.getElementById('singleCorrectText');
+    const singleWrongEl = document.getElementById('singleWrongText');
+    if (singleCorrectEl) singleCorrectEl.textContent = `${singleCorrectCount} (${singleCorrectPct}%)`;
+    if (singleWrongEl) singleWrongEl.textContent = `${singleWrongCount} (${singleWrongPct}%)`;
+
+    // Multiple Choice Tab Stats (正确, 漏选, 错误)
     const multiAnsCount = bankMultiple.filter(q => practiceState.answered[q.id]).length;
     const multiPct = ((multiAnsCount / 200) * 100).toFixed(1);
     multiFill.style.width = `${multiPct}%`;
     multiMeta.textContent = `已练 ${multiAnsCount} / 200 (${multiPct}%)`;
 
+    let multiCorrectCount = 0;
+    let multiMissedCount = 0;
+    let multiWrongCount = 0;
+
+    bankMultiple.forEach(q => {
+      const rec = practiceState.answered[q.id];
+      if (rec) {
+        const status = getMultiChoiceResultStatus(q, rec);
+        if (status === 'correct') multiCorrectCount++;
+        else if (status === 'missed') multiMissedCount++;
+        else if (status === 'wrong') multiWrongCount++;
+      }
+    });
+
+    const multiCorrectPct = multiAnsCount > 0 ? ((multiCorrectCount / multiAnsCount) * 100).toFixed(1) : '0.0';
+    const multiMissedPct = multiAnsCount > 0 ? ((multiMissedCount / multiAnsCount) * 100).toFixed(1) : '0.0';
+    const multiWrongPct = multiAnsCount > 0 ? ((multiWrongCount / multiAnsCount) * 100).toFixed(1) : '0.0';
+
+    const multiCorrectEl = document.getElementById('multiCorrectText');
+    const multiMissedEl = document.getElementById('multiMissedText');
+    const multiWrongEl = document.getElementById('multiWrongText');
+    if (multiCorrectEl) multiCorrectEl.textContent = `${multiCorrectCount} (${multiCorrectPct}%)`;
+    if (multiMissedEl) multiMissedEl.textContent = `${multiMissedCount} (${multiMissedPct}%)`;
+    if (multiWrongEl) multiWrongEl.textContent = `${multiWrongCount} (${multiWrongPct}%)`;
+
+    // TF Choice Tab Stats
     const tfAnsCount = bankTF.filter(q => practiceState.answered[q.id]).length;
     const tfPct = ((tfAnsCount / 400) * 100).toFixed(1);
     tfFill.style.width = `${tfPct}%`;
     tfMeta.textContent = `已练 ${tfAnsCount} / 400 (${tfPct}%)`;
 
+    let tfCorrectCount = 0;
+    let tfWrongCount = 0;
+    bankTF.forEach(q => {
+      const rec = practiceState.answered[q.id];
+      if (rec) {
+        if (rec.isCorrect) tfCorrectCount++;
+        else tfWrongCount++;
+      }
+    });
+    const tfCorrectPct = tfAnsCount > 0 ? ((tfCorrectCount / tfAnsCount) * 100).toFixed(1) : '0.0';
+    const tfWrongPct = tfAnsCount > 0 ? ((tfWrongCount / tfAnsCount) * 100).toFixed(1) : '0.0';
+    const tfCorrectEl = document.getElementById('tfCorrectText');
+    const tfWrongEl = document.getElementById('tfWrongText');
+    if (tfCorrectEl) tfCorrectEl.textContent = `${tfCorrectCount} (${tfCorrectPct}%)`;
+    if (tfWrongEl) tfWrongEl.textContent = `${tfWrongCount} (${tfWrongPct}%)`;
+
+    // Overall Progress & Accuracy
     const totalAnsCount = Object.keys(practiceState.answered).length;
     const totalPct = ((totalAnsCount / 1000) * 100).toFixed(1);
     totalProgressText.textContent = `${totalAnsCount} / 1000 (${totalPct}%)`;
