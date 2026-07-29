@@ -232,14 +232,15 @@
     optionsContainer.innerHTML = '';
     const userAns = currentExam.userAnswers[currentIndex];
 
-    if (q.category === 'tf') {
+    if (q.category === 'tf' || q.typeName === '判断题') {
       const opts = ['正确', '错误'];
       opts.forEach((optText, i) => {
-        const key = i === 0 ? '正确' : '错误';
+        const key = i === 0 ? 'A' : 'B';
+        const isSelected = userAns === key || (key === 'A' && userAns === '正确') || (key === 'B' && userAns === '错误');
         const optEl = document.createElement('div');
-        optEl.className = 'option-item' + (userAns === key ? ' selected' : '');
+        optEl.className = 'option-item' + (isSelected ? ' selected' : '');
         optEl.innerHTML = `
-          <div class="option-key">${i === 0 ? 'A' : 'B'}</div>
+          <div class="option-key">${key}</div>
           <div class="option-text">${optText}</div>
         `;
         optEl.addEventListener('click', () => selectAnswer(key));
@@ -250,7 +251,7 @@
       const labels = ['A', 'B', 'C', 'D', 'E'];
       q.options.forEach((optText, i) => {
         const key = labels[i] || String.fromCharCode(65 + i);
-        const isSelected = q.category === 'multiple' 
+        const isSelected = q.category === 'multiple' || q.typeName === '多选题'
           ? (Array.isArray(userAns) && userAns.includes(key))
           : (userAns === key);
 
@@ -262,7 +263,7 @@
         `;
 
         optEl.addEventListener('click', () => {
-          if (q.category === 'multiple') {
+          if (q.category === 'multiple' || q.typeName === '多选题') {
             let currentList = Array.isArray(userAns) ? [...userAns] : [];
             if (currentList.includes(key)) {
               currentList = currentList.filter(k => k !== key);
@@ -362,7 +363,7 @@
       let itemScore = 0;
       let status = 'wrong'; // 'correct', 'partial', 'wrong'
 
-      if (q.category === 'single') {
+      if (q.category === 'single' || q.typeName === '单选题') {
         if (userAns === q.answer) {
           itemScore = 1.0;
           status = 'correct';
@@ -370,20 +371,26 @@
         } else {
           wrongCount++;
         }
-      } else if (q.category === 'tf') {
-        if (userAns === q.answer) {
+      } else if (q.category === 'tf' || q.typeName === '判断题') {
+        const normalizedUserAns = userAns === '正确' ? 'A' : (userAns === '错误' ? 'B' : userAns);
+        const normalizedCorrectAns = q.answer === '正确' ? 'A' : (q.answer === '错误' ? 'B' : q.answer);
+        if (normalizedUserAns === normalizedCorrectAns) {
           itemScore = 0.5;
           status = 'correct';
           tfScore += 0.5;
         } else {
           wrongCount++;
         }
-      } else if (q.category === 'multiple') {
-        // Multiple Choice Rule:
+      } else if (q.category === 'multiple' || q.typeName === '多选题') {
+        // Multiple Choice (2.0 pts per question, 20 items = 40.0 pts)
         // Extra/wrong option -> 0 pts
-        // Partial correct (subset of correct options, 0 wrong option) -> 0.5 pt EACH correct option selected!
-        const correctSet = new Set(Array.isArray(q.answer) ? q.answer : [q.answer]);
-        const userSet = new Set(Array.isArray(userAns) ? userAns : []);
+        // All correct options selected & no wrong option -> 2.0 pts
+        // Partial correct options selected & no wrong option -> 0.5 pts per correct option (max 1.5)
+        let correctArr = Array.isArray(q.answer) ? q.answer : (typeof q.answer === 'string' ? q.answer.split('') : []);
+        let userArr = Array.isArray(userAns) ? userAns : (typeof userAns === 'string' ? userAns.split('') : []);
+
+        const correctSet = new Set(correctArr);
+        const userSet = new Set(userArr);
 
         let hasWrongOption = false;
         let correctCount = 0;
@@ -400,14 +407,14 @@
           itemScore = 0.0;
           status = 'wrong';
           wrongCount++;
-        } else if (correctCount === correctSet.size) {
+        } else if (correctCount === correctSet.size && userSet.size === correctSet.size) {
           // All correct!
-          itemScore = correctSet.size * 0.5; // Or full score
+          itemScore = 2.0;
           status = 'correct';
           multiScore += itemScore;
         } else {
-          // Partial correct
-          itemScore = correctCount * 0.5;
+          // Partial correct (漏选)
+          itemScore = Math.min(1.5, correctCount * 0.5);
           status = 'partial';
           multiScore += itemScore;
         }

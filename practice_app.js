@@ -390,12 +390,15 @@
 
   function renderTFOptions(q, record) {
     const opts = ['正确', '错误'];
-    const keys = ['正确', '错误'];
+    const keys = ['A', 'B'];
 
     opts.forEach((optText, i) => {
       const key = keys[i];
-      const isUserChoice = record && record.userAns === key;
-      const isCorrectChoice = q.answer === key;
+      const normalizedUserAns = record ? (record.userAns === '正确' ? 'A' : (record.userAns === '错误' ? 'B' : record.userAns)) : null;
+      const normalizedCorrectAns = q.answer === '正确' ? 'A' : (q.answer === '错误' ? 'B' : q.answer);
+
+      const isUserChoice = record && normalizedUserAns === key;
+      const isCorrectChoice = normalizedCorrectAns === key;
 
       const optEl = document.createElement('div');
       let classNames = 'option-item';
@@ -407,7 +410,7 @@
 
       optEl.className = classNames;
       optEl.innerHTML = `
-        <div class="option-key">${i === 0 ? 'A' : 'B'}</div>
+        <div class="option-key">${key}</div>
         <div class="option-text">${optText}</div>
       `;
 
@@ -496,7 +499,7 @@
     let isCorrect = false;
     let status = 'wrong';
 
-    if (q.category === 'multiple') {
+    if (q.category === 'multiple' || q.typeName === '多选题') {
       const correctSet = new Set(Array.isArray(q.answer) ? q.answer : [q.answer]);
       const userSet = new Set(Array.isArray(userAns) ? userAns : []);
       
@@ -510,6 +513,11 @@
 
       const tempRec = { userAns, isCorrect };
       status = getMultiChoiceResultStatus(q, tempRec);
+    } else if (q.category === 'tf' || q.typeName === '判断题') {
+      const normalizedUserAns = userAns === '正确' ? 'A' : (userAns === '错误' ? 'B' : userAns);
+      const normalizedCorrectAns = q.answer === '正确' ? 'A' : (q.answer === '错误' ? 'B' : q.answer);
+      isCorrect = normalizedUserAns === normalizedCorrectAns;
+      status = isCorrect ? 'correct' : 'wrong';
     } else {
       isCorrect = userAns === q.answer;
       status = isCorrect ? 'correct' : 'wrong';
@@ -546,10 +554,21 @@
   }
 
   function showFeedbackBanner(q, record) {
+    if (!record) {
+      feedbackBanner.style.display = 'none';
+      return;
+    }
+
     feedbackBanner.style.display = 'block';
 
-    const userAnsStr = Array.isArray(record.userAns) ? record.userAns.join(', ') : (record.userAns || '未作答');
-    const correctAnsStr = Array.isArray(q.answer) ? q.answer.join(', ') : q.answer;
+    let userAnsStr = Array.isArray(record.userAns) ? record.userAns.join(', ') : (record.userAns || '未作答');
+    let correctAnsStr = Array.isArray(q.answer) ? q.answer.join(', ') : q.answer;
+
+    if (q.category === 'tf' || q.typeName === '判断题') {
+      userAnsStr = record.userAns === 'A' ? 'A (正确)' : (record.userAns === 'B' ? 'B (错误)' : (record.userAns || '未作答'));
+      correctAnsStr = q.answer === 'A' ? 'A (正确)' : (q.answer === 'B' ? 'B (错误)' : q.answer);
+    }
+
     const wrongCount = getQuestionWrongCount(q, record);
 
     if (q.category === 'multiple') {
