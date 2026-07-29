@@ -1,6 +1,6 @@
 /**
  * Project Leader B License - Sequential Practice System JavaScript Logic
- * Includes Multi-Device Progress Sync Engine (Multi-Cloud Failover & Code Export/Import)
+ * Includes Multi-Device Progress Sync Engine (Multi-Cloud Failover, Code Export/Import & Reset Sync)
  */
 
 (function () {
@@ -396,9 +396,11 @@
   // ==================== MULTI-DEVICE SYNC ENGINE ====================
 
   function encodeProgressState() {
+    const isResetState = Object.keys(practiceState.answered).length === 0;
     const data = {
       answered: practiceState.answered,
-      positions: practiceState.categoryPositions
+      positions: practiceState.categoryPositions,
+      isReset: isResetState
     };
     return btoa(encodeURIComponent(JSON.stringify(data)));
   }
@@ -414,6 +416,19 @@
 
   function mergeProgressData(incoming) {
     if (!incoming || typeof incoming !== 'object') return false;
+
+    // Check if incoming code is an explicit RESET command
+    if (incoming.isReset && Object.keys(incoming.answered || {}).length === 0) {
+      if (confirm('⚠️ 检测到导入的暗号为【清空/重置进度】指令！\n确定要将本设备的练习进度也同步清空重置吗？')) {
+        practiceState.answered = {};
+        practiceState.categoryPositions = { single: 0, multiple: 0, tf: 0 };
+        saveState();
+        switchCategory('single');
+        updateAllProgressDisplays();
+        return true;
+      }
+      return false;
+    }
     
     if (incoming.answered) {
       Object.keys(incoming.answered).forEach(qId => {
@@ -468,7 +483,7 @@
         });
         if (res.ok) return;
       } catch (e) {
-        // try next provider
+        // try next
       }
     }
   }
@@ -498,7 +513,6 @@
       }
     }
 
-    // Attempt first upload
     try {
       await triggerCloudUpload();
       cloudSyncStatus.textContent = '✓ 已成功创建并绑定云端专属暗号！';
@@ -560,6 +574,15 @@
         saveState();
         switchCategory('single');
         updateAllProgressDisplays();
+
+        // Prompt to export reset code to reset other devices too
+        if (confirm('已清空本设备进度！是否复制【重置暗号】到剪贴板，以便去其他设备同步清空？')) {
+          const resetCode = encodeProgressState();
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(resetCode);
+            alert('✅ 重置暗号已复制！去其他设备点击【粘贴暗号导入进度】即可同步清空该设备。');
+          }
+        }
       }
     });
 
@@ -583,7 +606,6 @@
       autoCloudSync();
     });
 
-    // Copy Code to Clipboard (方式二 - 100% 成功)
     btnExportCode.addEventListener('click', () => {
       const code = encodeProgressState();
       if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -597,15 +619,14 @@
       }
     });
 
-    // Import Code (方式二 - 100% 成功)
     btnImportCode.addEventListener('click', () => {
       const inputCode = prompt('请粘贴您在其他设备上复制的进度暗号：');
       if (inputCode) {
         const decoded = decodeProgressState(inputCode);
         if (decoded && mergeProgressData(decoded)) {
-          alert('🎉 成功导入并合并练习进度！');
+          alert('🎉 成功同步进度！');
           syncModal.classList.remove('active');
-        } else {
+        } else if (!decoded) {
           alert('❌ 暗号格式无效，请重新复制后再试！');
         }
       }
