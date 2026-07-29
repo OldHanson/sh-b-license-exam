@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>项目负责人B证（复训）在线模拟考试系统</title>
+  <!-- Google Fonts & Font Awesome Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- TOP NAVIGATION HEADER -->
+    <header class="app-header">
+      <div class="header-container">
+        <div class="brand">
+          <div class="brand-icon"><i class="fa-solid fa-graduation-cap"></i></div>
+          <div class="brand-text">
+            <h1>项目负责人B证（复训）模拟考试</h1>
+            <span class="subtitle">全真模拟考场 · 1000题精选表格题库</span>
+          </div>
+        </div>
+
+        <div class="header-right">
+          <!-- Countdown Timer -->
+          <div class="timer-box" id="timerBox">
+            <i class="fa-regular fa-clock"></i>
+            <span class="timer-label">剩余时间</span>
+            <span class="timer-value" id="timerDisplay">90:00</span>
+          </div>
+
+          <!-- Switch to Sequential Practice Mode -->
+          <a href="顺序练习.html" class="btn btn-secondary" title="进入顺序刷题模式">
+            <i class="fa-solid fa-book-open"></i> 顺序刷题模式
+          </a>
+
+          <!-- Answer Sheet Button -->
+          <button class="btn btn-outline" id="btnToggleSheet" title="查看答题卡">
+            <i class="fa-solid fa-border-all"></i> 答题卡
+            <span class="badge-count" id="answeredBadge">0/100</span>
+          </button>
+
+          <!-- Refresh Exam Button -->
+          <button class="btn btn-secondary" id="btnRefreshExam" title="重新抽取考题">
+            <i class="fa-solid fa-arrows-rotate"></i> 换一套题
+          </button>
+
+          <!-- Submit Button -->
+          <button class="btn btn-primary" id="btnSubmitExam">
+            <i class="fa-solid fa-paper-plane"></i> 提交试卷
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- MAIN CONTENT AREA -->
+    <main class="main-container">
+
+      <!-- EXAM IN PROGRESS VIEW -->
+      <section id="examView" class="view-section active">
+        <!-- Exam Info Bar -->
+        <div class="exam-info-bar">
+          <div class="info-item">
+            <i class="fa-solid fa-list-check"></i>
+            <span>题量：<strong>100题</strong></span>
+          </div>
+          <div class="info-item">
+            <i class="fa-solid fa-sliders"></i>
+            <span>分布：<strong>单选40题 | 多选20题 | 判断40题</strong></span>
+          </div>
+          <div class="info-item">
+            <i class="fa-solid fa-award"></i>
+            <span>评分规则：<strong>单选1分/题，多选错选0分/少选选对各得0.5分，判断0.5分/题</strong></span>
+          </div>
+        </div>
+
+        <!-- Section Navigation Tabs -->
+        <div class="category-tabs">
+          <button class="tab-btn active" data-cat="single">
+            <i class="fa-regular fa-circle-dot"></i> 一、单选题 (40题)
+          </button>
+          <button class="tab-btn" data-cat="multiple">
+            <i class="fa-regular fa-square-check"></i> 二、多选题 (20题)
+          </button>
+          <button class="tab-btn" data-cat="tf">
+            <i class="fa-solid fa-scale-balanced"></i> 三、判断题 (40题)
+          </button>
+        </div>
+
+        <!-- Current Question Display Card -->
+        <div class="question-card" id="questionCard">
+          <div class="card-header">
+            <div class="question-tags">
+              <span class="tag-num" id="qNumTag">第 1 题</span>
+              <span class="tag-type" id="qTypeTag">单选题</span>
+              <span class="tag-score" id="qScoreTag">1.0 分</span>
+            </div>
+            <button class="btn-mark" id="btnMarkCurrent">
+              <i class="fa-regular fa-bookmark"></i> <span id="markBtnText">标记疑难</span>
+            </button>
+          </div>
+
+          <div class="question-body">
+            <h2 class="question-title" id="qTitle">题目加载中...</h2>
+            <div class="options-container" id="optionsContainer">
+              <!-- Options rendered dynamically -->
+            </div>
+          </div>
+
+          <div class="card-footer">
+            <button class="btn btn-outline" id="btnPrevQ">
+              <i class="fa-solid fa-chevron-left"></i> 上一题
+            </button>
+            <div class="quick-jump-info">
+              <span id="jumpText">1 / 100</span>
+            </div>
+            <button class="btn btn-primary" id="btnNextQ">
+              下一题 <i class="fa-solid fa-chevron-right"></i>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- RESULT & SCORE ANALYSIS VIEW -->
+      <section id="resultView" class="view-section">
+        <div class="result-hero-card">
+          <div class="score-badge-circle" id="scoreCircle">
+            <div class="score-val" id="finalScoreVal">0.0</div>
+            <div class="score-max">/ 100 分</div>
+          </div>
+
+          <div class="result-meta">
+            <div class="status-banner" id="passStatusBanner">
+              <i class="fa-solid fa-circle-check"></i> <span id="passStatusText">考试合格</span>
+            </div>
+            <p class="summary-text" id="summaryText">做答完成，用时 0分0秒</p>
+
+            <div class="score-breakdown-grid">
+              <div class="breakdown-card">
+                <span class="bd-title">单选题得分</span>
+                <span class="bd-val" id="singleScoreVal">0.0 / 40.0</span>
+              </div>
+              <div class="breakdown-card">
+                <span class="bd-title">多选题得分</span>
+                <span class="bd-val" id="multiScoreVal">0.0 / [加权]</span>
+              </div>
+              <div class="breakdown-card">
+                <span class="bd-title">判断题得分</span>
+                <span class="bd-val" id="tfScoreVal">0.0 / 20.0</span>
+              </div>
+            </div>
+
+            <div class="result-actions">
+              <button class="btn btn-primary btn-lg" id="btnRestartExam">
+                <i class="fa-solid fa-arrows-rotate"></i> 再考一次（重新抽题）
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Filter and Review List -->
+        <div class="review-section">
+          <div class="review-header">
+            <h3><i class="fa-solid fa-clipboard-list"></i> 试卷逐题解析与对错统计</h3>
+            <div class="filter-btn-group">
+              <button class="filter-btn active" data-filter="all">全部题目 (100)</button>
+              <button class="filter-btn filter-wrong" data-filter="wrong">仅看错题 (<span id="wrongCountVal">0</span>)</button>
+            </div>
+          </div>
+
+          <div class="review-list" id="reviewList">
+            <!-- Review items dynamically generated -->
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- ANSWER SHEET DRAWER MODAL -->
+    <div class="modal-overlay" id="sheetModal">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3><i class="fa-solid fa-border-all"></i> 答题卡 (全100题)</h3>
+          <button class="modal-close" id="btnCloseSheet"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">
+          <div class="sheet-legend">
+            <span class="legend-item"><span class="dot legend-answered"></span> 已答</span>
+            <span class="legend-item"><span class="dot legend-unanswered"></span> 未答</span>
+            <span class="legend-item"><span class="dot legend-marked"></span> 已标记</span>
+          </div>
+
+          <div class="sheet-section-title">一、单选题 (1 - 40)</div>
+          <div class="sheet-grid" id="sheetGridSingle"></div>
+
+          <div class="sheet-section-title">二、多选题 (41 - 60)</div>
+          <div class="sheet-grid" id="sheetGridMulti"></div>
+
+          <div class="sheet-section-title">三、判断题 (61 - 100)</div>
+          <div class="sheet-grid" id="sheetGridTF"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-primary btn-block" id="btnSubmitFromSheet">
+            <i class="fa-solid fa-paper-plane"></i> 确认交卷
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Load Question Bank JS -->
+  <script src="questions_bank.js"></script>
+  <!-- Load Main Application Logic JS -->
+  <script src="app.js"></script>
+</body>
+</html>

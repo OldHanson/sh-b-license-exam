@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>项目负责人B证（复训）顺序刷题练习</title>
+  <!-- Google Fonts & Font Awesome Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="practice_style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- APP HEADER -->
+    <header class="app-header">
+      <div class="header-container">
+        <div class="brand">
+          <div class="brand-icon"><i class="fa-solid fa-book-open"></i></div>
+          <div class="brand-text">
+            <h1>项目负责人B证（复训）顺序刷题练习</h1>
+            <span class="subtitle">1000题全量题库 · 即时判分解析模式</span>
+          </div>
+        </div>
+
+        <div class="header-right">
+          <!-- Overall Stats Badge -->
+          <div class="stats-badge">
+            <i class="fa-solid fa-chart-pie"></i>
+            <span>总练习进度: <strong id="totalProgressText">0 / 1000 (0%)</strong></span>
+            <span class="divider">|</span>
+            <span>正确率: <strong id="totalAccuracyText">0%</strong></span>
+          </div>
+
+          <!-- Switch to Exam Mode Button -->
+          <a href="index.html" class="btn btn-outline" title="进入模拟考试模式">
+            <i class="fa-solid fa-laptop-file"></i> 模拟考试模式
+          </a>
+
+          <!-- Reset Progress Button -->
+          <button class="btn btn-danger-outline" id="btnResetProgress" title="清空所有练习记录">
+            <i class="fa-solid fa-trash-can"></i> 重置进度
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- MAIN CONTAINER -->
+    <main class="main-container">
+
+      <!-- CATEGORY SELECTION TABS & PROGRESS -->
+      <section class="category-selection-card">
+        <div class="cat-nav">
+          <button class="cat-tab-btn active" data-cat="single">
+            <div class="tab-header">
+              <i class="fa-regular fa-circle-dot"></i>
+              <span>单选题板块 (400题)</span>
+            </div>
+            <div class="tab-progress-bar">
+              <div class="fill" id="singleFill" style="width: 0%;"></div>
+            </div>
+            <div class="tab-meta" id="singleMeta">已练 0 / 400 (0%)</div>
+          </button>
+
+          <button class="cat-tab-btn" data-cat="multiple">
+            <div class="tab-header">
+              <i class="fa-regular fa-square-check"></i>
+              <span>多选题板块 (200题)</span>
+            </div>
+            <div class="tab-progress-bar">
+              <div class="fill" id="multiFill" style="width: 0%;"></div>
+            </div>
+            <div class="tab-meta" id="multiMeta">已练 0 / 200 (0%)</div>
+          </button>
+
+          <button class="cat-tab-btn" data-cat="tf">
+            <div class="tab-header">
+              <i class="fa-solid fa-scale-balanced"></i>
+              <span>判断题板块 (400题)</span>
+            </div>
+            <div class="tab-progress-bar">
+              <div class="fill" id="tfFill" style="width: 0%;"></div>
+            </div>
+            <div class="tab-meta" id="tfMeta">已练 0 / 400 (0%)</div>
+          </button>
+        </div>
+      </section>
+
+      <!-- PRACTICE CARD -->
+      <section class="practice-card-wrapper">
+        <div class="question-card" id="practiceCard">
+          
+          <!-- Card Header & Navigation Controls -->
+          <div class="card-header">
+            <div class="left-info">
+              <span class="tag-cat" id="catTag">单选题</span>
+              <span class="tag-index" id="indexTag">第 1 / 400 题</span>
+              <span class="tag-global" id="globalIndexTag">全库第 1 题</span>
+            </div>
+
+            <div class="right-jump">
+              <label for="jumpSelect"><i class="fa-solid fa-turn-down"></i> 快速跳转：</label>
+              <select id="jumpSelect" class="jump-dropdown">
+                <!-- Jump options populated dynamically -->
+              </select>
+            </div>
+          </div>
+
+          <!-- Question Body -->
+          <div class="card-body">
+            <h2 class="question-title" id="pTitle">题目加载中...</h2>
+            
+            <!-- Options Container -->
+            <div class="options-container" id="pOptionsContainer">
+              <!-- Options populated dynamically -->
+            </div>
+
+            <!-- Submit Multiple Choice Button (Hidden for Single & TF) -->
+            <div class="multi-submit-wrapper" id="multiSubmitWrapper" style="display: none;">
+              <button class="btn btn-primary btn-lg" id="btnSubmitMulti">
+                <i class="fa-solid fa-check"></i> 提交本题答案
+              </button>
+            </div>
+
+            <!-- Immediate Result & Answer Feedback Banner -->
+            <div class="feedback-banner" id="feedbackBanner" style="display: none;">
+              <div class="feedback-status-row" id="feedbackStatusRow">
+                <!-- Status icon and message -->
+              </div>
+              <div class="feedback-details-row">
+                <div class="ans-box">
+                  <span class="ans-label">您的选择：</span>
+                  <span class="ans-val" id="userAnsVal">A</span>
+                </div>
+                <div class="ans-box">
+                  <span class="ans-label">正确答案：</span>
+                  <span class="ans-val correct" id="correctAnsVal">C</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card Footer Controls -->
+          <div class="card-footer">
+            <button class="btn btn-outline" id="btnPrevP">
+              <i class="fa-solid fa-chevron-left"></i> 上一题
+            </button>
+
+            <div class="footer-center-info">
+              <button class="btn btn-secondary btn-sm" id="btnReAnswer">
+                <i class="fa-solid fa-rotate-left"></i> 重新作答本题
+              </button>
+            </div>
+
+            <button class="btn btn-primary" id="btnNextP">
+              下一题 <i class="fa-solid fa-chevron-right"></i>
+            </button>
+          </div>
+
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Load Question Bank JS & Practice App JS -->
+  <script src="questions_bank.js"></script>
+  <script src="practice_app.js"></script>
+</body>
+</html>
