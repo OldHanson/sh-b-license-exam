@@ -33,9 +33,14 @@
             <span>正确率: <strong id="totalAccuracyText">0%</strong></span>
           </div>
 
+          <!-- Multi-device Sync Button -->
+          <button class="btn btn-outline" id="btnSyncModal" title="多设备进度同步">
+            <i class="fa-solid fa-cloud-arrow-up"></i> 多设备同步
+          </button>
+
           <!-- Switch to Exam Mode Button -->
           <a href="index.html" class="btn btn-outline" title="进入模拟考试模式">
-            <i class="fa-solid fa-laptop-file"></i> 模拟考试模式
+            <i class="fa-solid fa-laptop-file"></i> 模拟考试
           </a>
 
           <!-- Reset Progress Button -->
@@ -162,6 +167,47 @@
       </section>
 
     </main>
+
+    <!-- MULTI-DEVICE SYNC MODAL -->
+    <div class="modal-overlay" id="syncModal">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3><i class="fa-solid fa-rotate"></i> 多设备进度同步 (iPhone / iPad / Mac)</h3>
+          <button class="modal-close" id="btnCloseSync"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">
+          <!-- Option 1: Cloud Sync Code -->
+          <div class="sync-block">
+            <h4><i class="fa-solid fa-cloud"></i> 方式一：云端暗号实时自动同步（推荐 ⭐⭐⭐⭐⭐）</h4>
+            <p class="sync-desc">在 iPhone、iPad 与 Mac 上设置相同的【专属同步暗号】，即可多设备自动同步刷题进度与作答记录。</p>
+            <div class="sync-input-group">
+              <input type="text" id="cloudSyncKey" class="sync-input" placeholder="设置您的专属暗号 (例如: hz913)">
+              <button class="btn btn-primary" id="btnCloudSyncNow">
+                <i class="fa-solid fa-rotate"></i> 绑定并同步
+              </button>
+            </div>
+            <div class="sync-status" id="cloudSyncStatus"></div>
+          </div>
+
+          <hr class="sync-divider">
+
+          <!-- Option 2: Export / Import via Text Code -->
+          <div class="sync-block">
+            <h4><i class="fa-solid fa-key"></i> 方式二：暗号口令 手动迁移（离线备用）</h4>
+            <p class="sync-desc">在已刷题的设备上点击【复制暗号】，在另一台设备上点击【粘贴暗号导入】即可完成进度迁移。</p>
+            <div class="sync-btn-row">
+              <button class="btn btn-secondary" id="btnExportCode">
+                <i class="fa-solid fa-copy"></i> 复制当前进度暗号
+              </button>
+              <button class="btn btn-secondary" id="btnImportCode">
+                <i class="fa-solid fa-file-import"></i> 粘贴暗号导入进度
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div>
 
   <!-- Load Question Bank JS & Practice App JS -->

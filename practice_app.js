@@ -1,5 +1,6 @@
 /**
  * Project Leader B License - Sequential Practice System JavaScript Logic
+ * Includes Multi-Device Progress Sync (Cloud Key & Text Code Export/Import)
  */
 
 (function () {
@@ -15,7 +16,8 @@
       single: 0,
       multiple: 0,
       tf: 0
-    }
+    },
+    cloudSyncKey: ''
   };
 
   // Raw Question Bank categorized
@@ -62,6 +64,16 @@
   const btnNextP = document.getElementById('btnNextP');
   const btnReAnswer = document.getElementById('btnReAnswer');
 
+  // Sync Modal Elements
+  const syncModal = document.getElementById('syncModal');
+  const btnSyncModal = document.getElementById('btnSyncModal');
+  const btnCloseSync = document.getElementById('btnCloseSync');
+  const cloudSyncKeyInput = document.getElementById('cloudSyncKey');
+  const btnCloudSyncNow = document.getElementById('btnCloudSyncNow');
+  const cloudSyncStatus = document.getElementById('cloudSyncStatus');
+  const btnExportCode = document.getElementById('btnExportCode');
+  const btnImportCode = document.getElementById('btnImportCode');
+
   // Multi-choice temporary selected options
   let tempMultiSelected = [];
 
@@ -74,6 +86,11 @@
     setupEventListeners();
     switchCategory(practiceState.currentCategory || 'single');
     updateAllProgressDisplays();
+
+    if (practiceState.cloudSyncKey) {
+      cloudSyncKeyInput.value = practiceState.cloudSyncKey;
+      autoCloudSync();
+    }
   }
 
   function loadBankData() {
@@ -92,7 +109,8 @@
           practiceState = {
             answered: parsed.answered || {},
             currentCategory: parsed.currentCategory || 'single',
-            categoryPositions: parsed.categoryPositions || { single: 0, multiple: 0, tf: 0 }
+            categoryPositions: parsed.categoryPositions || { single: 0, multiple: 0, tf: 0 },
+            cloudSyncKey: parsed.cloudSyncKey || ''
           };
         }
       } catch (e) {
@@ -119,12 +137,10 @@
       catTag.textContent = '判断题';
     }
 
-    // Set position to saved index for this category
     currentIndex = practiceState.categoryPositions[category] || 0;
     if (currentIndex >= currentList.length) currentIndex = currentList.length - 1;
     if (currentIndex < 0) currentIndex = 0;
 
-    // Update Tab UI active state
     catTabs.forEach(tab => {
       if (tab.dataset.cat === category) {
         tab.classList.add('active');
@@ -187,14 +203,12 @@
       showFeedbackBanner(q, record);
     }
 
-    // Navigation buttons
     btnPrevP.disabled = currentIndex === 0;
     btnNextP.disabled = currentIndex === currentList.length - 1;
 
     updateAllProgressDisplays();
   }
 
-  // Render True/False Options
   function renderTFOptions(q, record) {
     const opts = ['正确', '错误'];
     const keys = ['正确', '错误'];
@@ -226,7 +240,6 @@
     });
   }
 
-  // Render Single Choice Options
   function renderSingleOptions(q, record) {
     const labels = ['A', 'B', 'C', 'D', 'E'];
 
@@ -257,7 +270,6 @@
     });
   }
 
-  // Render Multiple Choice Options
   function renderMultipleOptions(q, record) {
     const labels = ['A', 'B', 'C', 'D', 'E'];
     if (!record) {
@@ -301,7 +313,6 @@
     });
   }
 
-  // Submit Answer Logic
   function submitAnswer(q, userAns) {
     let isCorrect = false;
 
@@ -329,6 +340,10 @@
     saveState();
     populateJumpSelect();
     renderCurrentQuestion();
+
+    if (practiceState.cloudSyncKey) {
+      triggerCloudUpload();
+    }
   }
 
   function showFeedbackBanner(q, record) {
@@ -349,32 +364,26 @@
     correctAnsVal.textContent = correctAnsStr;
   }
 
-  // Update All Progress Displays
   function updateAllProgressDisplays() {
-    // Single category progress
     const singleAnsCount = bankSingle.filter(q => practiceState.answered[q.id]).length;
     const singlePct = ((singleAnsCount / 400) * 100).toFixed(1);
     singleFill.style.width = `${singlePct}%`;
     singleMeta.textContent = `已练 ${singleAnsCount} / 400 (${singlePct}%)`;
 
-    // Multiple category progress
     const multiAnsCount = bankMultiple.filter(q => practiceState.answered[q.id]).length;
     const multiPct = ((multiAnsCount / 200) * 100).toFixed(1);
     multiFill.style.width = `${multiPct}%`;
     multiMeta.textContent = `已练 ${multiAnsCount} / 200 (${multiPct}%)`;
 
-    // TF category progress
     const tfAnsCount = bankTF.filter(q => practiceState.answered[q.id]).length;
     const tfPct = ((tfAnsCount / 400) * 100).toFixed(1);
     tfFill.style.width = `${tfPct}%`;
     tfMeta.textContent = `已练 ${tfAnsCount} / 400 (${tfPct}%)`;
 
-    // Total Overall Progress
     const totalAnsCount = Object.keys(practiceState.answered).length;
     const totalPct = ((totalAnsCount / 1000) * 100).toFixed(1);
     totalProgressText.textContent = `${totalAnsCount} / 1000 (${totalPct}%)`;
 
-    // Calculate overall accuracy rate
     let correctTotal = 0;
     Object.values(practiceState.answered).forEach(rec => {
       if (rec.isCorrect) correctTotal++;
@@ -384,22 +393,120 @@
     totalAccuracyText.textContent = `${accuracyPct}%`;
   }
 
+  // ==================== MULTI-DEVICE SYNC ENGINE ====================
+  const SYNC_API_ENDPOINT = 'https://api.keyvalue.xyz';
+
+  function encodeProgressState() {
+    const data = {
+      answered: practiceState.answered,
+      positions: practiceState.categoryPositions
+    };
+    return btoa(encodeURIComponent(JSON.stringify(data)));
+  }
+
+  function decodeProgressState(codeStr) {
+    try {
+      const jsonStr = decodeURIComponent(atob(codeStr.trim()));
+      return JSON.parse(jsonStr);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function mergeProgressData(incoming) {
+    if (!incoming || typeof incoming !== 'object') return false;
+    
+    if (incoming.answered) {
+      Object.keys(incoming.answered).forEach(qId => {
+        const item = incoming.answered[qId];
+        const existing = practiceState.answered[qId];
+        if (!existing || (item.timestamp && item.timestamp > (existing.timestamp || 0))) {
+          practiceState.answered[qId] = item;
+        }
+      });
+    }
+
+    if (incoming.positions) {
+      Object.keys(incoming.positions).forEach(cat => {
+        if (incoming.positions[cat] !== undefined) {
+          practiceState.categoryPositions[cat] = Math.max(
+            practiceState.categoryPositions[cat] || 0,
+            incoming.positions[cat]
+          );
+        }
+      });
+    }
+
+    saveState();
+    switchCategory(practiceState.currentCategory);
+    updateAllProgressDisplays();
+    return true;
+  }
+
+  async function triggerCloudUpload() {
+    const key = practiceState.cloudSyncKey;
+    if (!key) return;
+
+    try {
+      const payload = {
+        answered: practiceState.answered,
+        positions: practiceState.categoryPositions,
+        updatedAt: Date.now()
+      };
+      
+      await fetch(`${SYNC_API_ENDPOINT}/b_license_${key}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    } catch (e) {
+      console.warn('Cloud upload failed:', e);
+    }
+  }
+
+  async function autoCloudSync() {
+    const key = practiceState.cloudSyncKey;
+    if (!key) return;
+
+    try {
+      cloudSyncStatus.textContent = '🔄 正在同步云端进度...';
+      cloudSyncStatus.className = 'sync-status';
+
+      const res = await fetch(`${SYNC_API_ENDPOINT}/b_license_${key}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.answered) {
+          mergeProgressData(data);
+          cloudSyncStatus.textContent = `✓ 已成功同步云端进度 (共 ${Object.keys(practiceState.answered).length} 题记录)`;
+          cloudSyncStatus.className = 'sync-status success';
+          return;
+        }
+      }
+
+      // If key doesn't exist yet, upload current state
+      await triggerCloudUpload();
+      cloudSyncStatus.textContent = '✓ 已成功创建并绑定云端专属节点！';
+      cloudSyncStatus.className = 'sync-status success';
+
+    } catch (e) {
+      cloudSyncStatus.textContent = '⚠️ 局域网/离线状态，已使用本地进度。';
+      cloudSyncStatus.className = 'sync-status error';
+    }
+  }
+
   // Event Listeners Setup
   function setupEventListeners() {
-    // Category Tabs click
     catTabs.forEach(tab => {
       tab.addEventListener('click', () => {
         switchCategory(tab.dataset.cat);
       });
     });
 
-    // Dropdown Jump
     jumpSelect.addEventListener('change', (e) => {
       currentIndex = parseInt(e.target.value, 10);
       renderCurrentQuestion();
     });
 
-    // Previous & Next Question Buttons
     btnPrevP.addEventListener('click', () => {
       if (currentIndex > 0) {
         currentIndex--;
@@ -414,7 +521,6 @@
       }
     });
 
-    // Re-answer current question
     btnReAnswer.addEventListener('click', () => {
       const q = currentList[currentIndex];
       delete practiceState.answered[q.id];
@@ -423,7 +529,6 @@
       renderCurrentQuestion();
     });
 
-    // Multiple choice submit button
     btnSubmitMulti.addEventListener('click', () => {
       const q = currentList[currentIndex];
       if (tempMultiSelected.length === 0) {
@@ -433,17 +538,57 @@
       submitAnswer(q, tempMultiSelected);
     });
 
-    // Reset Progress Button
     btnResetProgress.addEventListener('click', () => {
       if (confirm('确定要清空所有练习进度和作答记录吗？此操作无法撤销。')) {
-        practiceState = {
-          answered: {},
-          currentCategory: 'single',
-          categoryPositions: { single: 0, multiple: 0, tf: 0 }
-        };
+        practiceState.answered = {};
+        practiceState.categoryPositions = { single: 0, multiple: 0, tf: 0 };
         saveState();
         switchCategory('single');
         updateAllProgressDisplays();
+      }
+    });
+
+    // Sync Modal Listeners
+    btnSyncModal.addEventListener('click', () => {
+      syncModal.classList.add('active');
+    });
+
+    btnCloseSync.addEventListener('click', () => {
+      syncModal.classList.remove('active');
+    });
+
+    btnCloudSyncNow.addEventListener('click', () => {
+      const key = cloudSyncKeyInput.value.trim();
+      if (!key) {
+        alert('请输入您的专属暗号！');
+        return;
+      }
+      practiceState.cloudSyncKey = key;
+      saveState();
+      autoCloudSync();
+    });
+
+    // Copy Code to Clipboard
+    btnExportCode.addEventListener('click', () => {
+      const code = encodeProgressState();
+      navigator.clipboard.writeText(code).then(() => {
+        alert('✅ 进度暗号已复制到剪贴板！\n请在另一台设备点击【粘贴暗号导入进度】进行粘贴。');
+      }).catch(() => {
+        prompt('请复制下方您的进度暗号：', code);
+      });
+    });
+
+    // Import Code
+    btnImportCode.addEventListener('click', () => {
+      const inputCode = prompt('请粘贴您在其他设备上复制的进度暗号：');
+      if (inputCode) {
+        const decoded = decodeProgressState(inputCode);
+        if (decoded && mergeProgressData(decoded)) {
+          alert('🎉 成功导入并合并练习进度！');
+          syncModal.classList.remove('active');
+        } else {
+          alert('❌ 暗号格式无效，请重新复制后再试！');
+        }
       }
     });
   }
