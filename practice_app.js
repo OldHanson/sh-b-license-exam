@@ -111,7 +111,8 @@
           practiceState = {
             answered: parsed.answered || {},
             currentCategory: parsed.currentCategory || 'single',
-            categoryPositions: parsed.categoryPositions || { single: 0, multiple: 0, tf: 0 },
+            wrongFilter: parsed.wrongFilter || 'all',
+            categoryPositions: parsed.categoryPositions || { single: 0, multiple: 0, tf: 0, wrong: 0 },
             cloudSyncKey: parsed.cloudSyncKey || ''
           };
         }
@@ -147,11 +148,17 @@
     return isQuestionInWrongSet(q, rec) ? 1 : 0;
   }
 
-  function getWrongQuestionsList() {
+  function getWrongQuestionsList(filterOverride) {
     const rawBank = window.QUESTION_BANK || [];
+    const filter = filterOverride || practiceState.wrongFilter || 'all';
+
     const wrongList = rawBank.filter(q => {
       const rec = practiceState.answered[q.id];
-      return isQuestionInWrongSet(q, rec);
+      if (!isQuestionInWrongSet(q, rec)) return false;
+      if (filter === 'single' && q.category !== 'single') return false;
+      if (filter === 'multiple' && q.category !== 'multiple') return false;
+      if (filter === 'tf' && q.category !== 'tf') return false;
+      return true;
     });
 
     // 错题集练习模式：按收录时间顺序（从最早到最近）排序
@@ -168,20 +175,35 @@
 
   function switchCategory(category) {
     practiceState.currentCategory = category;
-    
+    const wrongFilterBar = document.getElementById('wrongFilterBar');
+
     if (category === 'single') {
       currentList = bankSingle;
       catTag.textContent = '单选题';
+      if (wrongFilterBar) wrongFilterBar.style.display = 'none';
     } else if (category === 'multiple') {
       currentList = bankMultiple;
       catTag.textContent = '多选题';
+      if (wrongFilterBar) wrongFilterBar.style.display = 'none';
     } else if (category === 'tf') {
       currentList = bankTF;
       catTag.textContent = '判断题';
+      if (wrongFilterBar) wrongFilterBar.style.display = 'none';
     } else if (category === 'wrong') {
       wrongReviewAnswered = {}; // Clear previous session answers so questions present clean for new practice
       currentList = getWrongQuestionsList();
       catTag.textContent = '错题集练习';
+      if (wrongFilterBar) wrongFilterBar.style.display = 'flex';
+
+      const wrongFilterBtns = document.querySelectorAll('.wrong-filter-btn');
+      const activeFilter = practiceState.wrongFilter || 'all';
+      wrongFilterBtns.forEach(btn => {
+        if (btn.dataset.wrongCat === activeFilter) {
+          btn.classList.add('active');
+        } else {
+          btn.classList.remove('active');
+        }
+      });
     }
 
     currentIndex = practiceState.categoryPositions[category] || 0;
@@ -681,9 +703,13 @@
     if (tfCorrectEl) tfCorrectEl.textContent = `${tfCorrectCount} (${tfCorrectPct}%)`;
     if (tfWrongEl) tfWrongEl.textContent = `${tfWrongCount} (${tfWrongPct}%)`;
 
-    // Wrong Questions Tab Stats (错题集)
-    const wrongList = getWrongQuestionsList();
-    const wrongCount = wrongList.length;
+    // Wrong Questions Tab Stats (错题集) & Filter Badges
+    const allWrongList = getWrongQuestionsList('all');
+    const singleWrongList = getWrongQuestionsList('single');
+    const multiWrongList = getWrongQuestionsList('multiple');
+    const tfWrongList = getWrongQuestionsList('tf');
+
+    const wrongCount = allWrongList.length;
     const totalAnsCount = Object.keys(practiceState.answered).length;
     const wrongPct = totalAnsCount > 0 ? ((wrongCount / totalAnsCount) * 100).toFixed(1) : '0.0';
 
@@ -696,6 +722,17 @@
     if (wrongMetaPctEl) wrongMetaPctEl.textContent = `${wrongPct}%`;
     if (wrongBadgeTextEl) wrongBadgeTextEl.textContent = `${wrongCount} 题`;
     if (wrongFillEl) wrongFillEl.style.width = `${Math.min(wrongPct, 100)}%`;
+
+    // Filter button count badges
+    const wrongCountAllEl = document.getElementById('wrongCountAll');
+    const wrongCountSingleEl = document.getElementById('wrongCountSingle');
+    const wrongCountMultipleEl = document.getElementById('wrongCountMultiple');
+    const wrongCountTFEl = document.getElementById('wrongCountTF');
+
+    if (wrongCountAllEl) wrongCountAllEl.textContent = allWrongList.length;
+    if (wrongCountSingleEl) wrongCountSingleEl.textContent = singleWrongList.length;
+    if (wrongCountMultipleEl) wrongCountMultipleEl.textContent = multiWrongList.length;
+    if (wrongCountTFEl) wrongCountTFEl.textContent = tfWrongList.length;
 
     // Overall Progress & Accuracy
     const totalPct = ((totalAnsCount / 1000) * 100).toFixed(1);
@@ -845,6 +882,30 @@
     catTabs.forEach(tab => {
       tab.addEventListener('click', () => {
         switchCategory(tab.dataset.cat);
+      });
+    });
+
+    const wrongFilterBtns = document.querySelectorAll('.wrong-filter-btn');
+    wrongFilterBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const filterCat = btn.dataset.wrongCat;
+        practiceState.wrongFilter = filterCat;
+
+        wrongFilterBtns.forEach(b => {
+          if (b.dataset.wrongCat === filterCat) {
+            b.classList.add('active');
+          } else {
+            b.classList.remove('active');
+          }
+        });
+
+        if (practiceState.currentCategory === 'wrong') {
+          currentList = getWrongQuestionsList();
+          currentIndex = 0;
+          populateJumpSelect();
+          renderCurrentQuestion();
+          saveState();
+        }
       });
     });
 

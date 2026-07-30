@@ -2363,7 +2363,7 @@ window.QUESTION_BANK = [
       "修改后通过",
       "论证不通过"
     ],
-    "answer": "C"
+    "answer": "D"
   },
   {
     "id": 183,
@@ -2714,7 +2714,7 @@ window.QUESTION_BANK = [
       "流动式起重机",
       "升降作业平台"
     ],
-    "answer": "B"
+    "answer": "C"
   },
   {
     "id": 210,
@@ -7460,7 +7460,9 @@ window.QUESTION_BANK = [
       "监理单位"
     ],
     "answer": [
+      "B",
       "C",
+      "D",
       "E"
     ]
   },
@@ -7478,7 +7480,7 @@ window.QUESTION_BANK = [
     ],
     "answer": [
       "C",
-      "D"
+      "E"
     ]
   },
   {
@@ -7773,8 +7775,8 @@ window.QUESTION_BANK = [
       "违反安全操作规\n程"
     ],
     "answer": [
-      "C",
-      "E"
+      "B",
+      "C"
     ]
   },
   {
@@ -7810,6 +7812,7 @@ window.QUESTION_BANK = [
     ],
     "answer": [
       "A",
+      "B",
       "C",
       "D"
     ]
@@ -7846,8 +7849,10 @@ window.QUESTION_BANK = [
       "无法满足安全技\n术规范"
     ],
     "answer": [
+      "B",
       "C",
-      "D"
+      "D",
+      "E"
     ]
   },
   {
@@ -7920,8 +7925,9 @@ window.QUESTION_BANK = [
       "持证人死亡或者\n不具有完全民事\n行为能力的"
     ],
     "answer": [
-      "C",
-      "E"
+      "A",
+      "B",
+      "D"
     ]
   },
   {
@@ -7938,6 +7944,7 @@ window.QUESTION_BANK = [
     ],
     "answer": [
       "C",
+      "D",
       "E"
     ]
   },
@@ -8249,8 +8256,7 @@ window.QUESTION_BANK = [
       "A",
       "B",
       "C",
-      "D",
-      "E"
+      "D"
     ]
   },
   {
@@ -8304,6 +8310,7 @@ window.QUESTION_BANK = [
     ],
     "answer": [
       "A",
+      "B",
       "C",
       "E"
     ]
@@ -8379,6 +8386,8 @@ window.QUESTION_BANK = [
     "answer": [
       "A",
       "B",
+      "C",
+      "D",
       "E"
     ]
   },
@@ -8474,6 +8483,7 @@ window.QUESTION_BANK = [
       "A",
       "B",
       "C",
+      "D",
       "E"
     ]
   },
@@ -8755,7 +8765,9 @@ window.QUESTION_BANK = [
     "answer": [
       "A",
       "B",
-      "C"
+      "C",
+      "D",
+      "E"
     ]
   },
   {
@@ -10088,7 +10100,7 @@ window.QUESTION_BANK = [
       "正确",
       "错误"
     ],
-    "answer": "B"
+    "answer": "A"
   },
   {
     "id": 712,
@@ -11749,7 +11761,7 @@ window.QUESTION_BANK = [
       "正确",
       "错误"
     ],
-    "answer": "B"
+    "answer": "A"
   },
   {
     "id": 863,

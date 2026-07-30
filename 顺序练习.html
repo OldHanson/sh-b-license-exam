@@ -135,6 +135,23 @@
         </div>
       </section>
 
+      <!-- WRONG QUESTION FILTER BAR (Visible only in 错题集 mode) -->
+      <div class="wrong-filter-bar" id="wrongFilterBar" style="display: none;">
+        <span class="filter-label"><i class="fa-solid fa-filter"></i> 错题题型筛选：</span>
+        <button class="wrong-filter-btn active" data-wrong-cat="all">
+          <i class="fa-solid fa-layer-group"></i> 全部错题 (<span id="wrongCountAll">0</span>题)
+        </button>
+        <button class="wrong-filter-btn" data-wrong-cat="single">
+          <i class="fa-regular fa-circle-dot"></i> 单选题 (<span id="wrongCountSingle">0</span>题)
+        </button>
+        <button class="wrong-filter-btn" data-wrong-cat="multiple">
+          <i class="fa-regular fa-square-check"></i> 多选题 (<span id="wrongCountMultiple">0</span>题)
+        </button>
+        <button class="wrong-filter-btn" data-wrong-cat="tf">
+          <i class="fa-solid fa-scale-balanced"></i> 判断题 (<span id="wrongCountTF">0</span>题)
+        </button>
+      </div>
+
       <!-- PRACTICE CARD -->
       <section class="practice-card-wrapper">
         <div class="question-card" id="practiceCard">
