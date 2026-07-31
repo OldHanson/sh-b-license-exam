@@ -773,6 +773,31 @@
 
   // ==================== MULTI-DEVICE SYNC ENGINE ====================
 
+  // Safe Unicode Base64 Encoding & Decoding Helpers
+  function safeBase64Encode(str) {
+    try {
+      return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (match, p1) => {
+        return String.fromCharCode('0x' + p1);
+      }));
+    } catch (e) {
+      return btoa(str);
+    }
+  }
+
+  function safeBase64Decode(str) {
+    try {
+      return decodeURIComponent(Array.prototype.map.call(atob(str), (c) => {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+      }).join(''));
+    } catch (e) {
+      try {
+        return decodeURIComponent(atob(str));
+      } catch (e2) {
+        return atob(str);
+      }
+    }
+  }
+
   function encodeProgressState() {
     const isResetState = Object.keys(practiceState.answered).length === 0;
     if (isResetState) {
@@ -801,86 +826,100 @@
       a: compactAns
     };
 
-    return 'BPRAC2_' + btoa(encodeURIComponent(JSON.stringify(payload)));
+    return 'BPRAC2_' + safeBase64Encode(JSON.stringify(payload));
   }
 
   function decodeProgressState(codeStr) {
     if (!codeStr) return null;
     let clean = codeStr.trim().replace(/\s+/g, '');
 
-    // Case 1: Ultra-compact BPRAC2_ format
-    if (clean.startsWith('BPRAC2_')) {
-      try {
-        const raw = clean.substring(7);
-        const jsonStr = decodeURIComponent(atob(raw));
-        const payload = JSON.parse(jsonStr);
-        if (payload && payload.v === 2) {
-          const rawBankMap = {};
-          (window.QUESTION_BANK || []).forEach(q => { rawBankMap[q.id] = q; });
-
-          const answeredObj = {};
-          if (payload.a) {
-            Object.keys(payload.a).forEach(qId => {
-              const val = payload.a[qId];
-              const q = rawBankMap[qId];
-              let isRight = false;
-              let ansVal = val;
-
-              if (q) {
-                if (q.category === 'multiple') {
-                  ansVal = val.split('').sort();
-                  const targetAnsStr = Array.isArray(q.answer) ? q.answer.join('') : String(q.answer);
-                  isRight = ansVal.join('') === targetAnsStr;
-                } else {
-                  isRight = val === q.answer;
-                }
-              }
-
-              answeredObj[qId] = {
-                ans: ansVal,
-                isRight: isRight,
-                timestamp: Date.now()
-              };
-            });
-          }
-
-          return {
-            answered: answeredObj,
-            positions: {
-              single: payload.p ? payload.p[0] : 0,
-              multiple: payload.p ? payload.p[1] : 0,
-              tf: payload.p ? payload.p[2] : 0,
-              wrong: payload.p ? payload.p[3] : 0
-            }
-          };
-        }
-      } catch (e) { console.error('BPRAC2 decode error:', e); }
-    }
-
-    // Case 2: RESET Command
     if (clean === 'BPRAC_RESET') {
       return { isReset: true, answered: {}, positions: { single: 0, multiple: 0, tf: 0, wrong: 0 } };
     }
 
-    // Case 3: Standard legacy Base64 with URI component
+    // Strip prefix if any (e.g. BPRAC2_, BPRAC1_, BPRAC_)
+    let payloadStr = clean;
+    if (clean.includes('_')) {
+      payloadStr = clean.substring(clean.indexOf('_') + 1);
+    }
+
+    let parsed = null;
+
+    // Try 1: safeBase64Decode
     try {
-      const jsonStr = decodeURIComponent(atob(clean));
-      const obj = JSON.parse(jsonStr);
-      if (obj && typeof obj === 'object') return obj;
+      const raw = safeBase64Decode(payloadStr);
+      parsed = JSON.parse(raw);
     } catch (e) {}
 
-    // Case 4: Direct base64 without URI component
-    try {
-      const jsonStr = atob(clean);
-      const obj = JSON.parse(jsonStr);
-      if (obj && typeof obj === 'object') return obj;
-    } catch (e) {}
+    // Try 2: decodeURIComponent(atob)
+    if (!parsed) {
+      try {
+        const raw = decodeURIComponent(atob(payloadStr));
+        parsed = JSON.parse(raw);
+      } catch (e) {}
+    }
 
-    // Case 5: Raw JSON string
-    try {
-      const obj = JSON.parse(codeStr.trim());
-      if (obj && typeof obj === 'object') return obj;
-    } catch (e) {}
+    // Try 3: direct atob
+    if (!parsed) {
+      try {
+        const raw = atob(payloadStr);
+        parsed = JSON.parse(raw);
+      } catch (e) {}
+    }
+
+    // Try 4: raw codeStr JSON
+    if (!parsed) {
+      try {
+        parsed = JSON.parse(codeStr.trim());
+      } catch (e) {}
+    }
+
+    if (!parsed || typeof parsed !== 'object') return null;
+
+    // If parsed is in compact format v=2:
+    if (parsed.v === 2 && parsed.a) {
+      const rawBankMap = {};
+      (window.QUESTION_BANK || []).forEach(q => { rawBankMap[q.id] = q; });
+
+      const answeredObj = {};
+      Object.keys(parsed.a).forEach(qId => {
+        const val = parsed.a[qId];
+        const q = rawBankMap[qId];
+        let isRight = false;
+        let ansVal = val;
+
+        if (q) {
+          if (q.category === 'multiple') {
+            ansVal = typeof val === 'string' ? val.split('').sort() : val;
+            const targetAnsStr = Array.isArray(q.answer) ? q.answer.join('') : String(q.answer);
+            isRight = (Array.isArray(ansVal) ? ansVal.join('') : String(ansVal)) === targetAnsStr;
+          } else {
+            isRight = val === q.answer;
+          }
+        }
+
+        answeredObj[qId] = {
+          ans: ansVal,
+          isRight: isRight,
+          timestamp: Date.now()
+        };
+      });
+
+      return {
+        answered: answeredObj,
+        positions: {
+          single: parsed.p ? parsed.p[0] : 0,
+          multiple: parsed.p ? parsed.p[1] : 0,
+          tf: parsed.p ? parsed.p[2] : 0,
+          wrong: parsed.p ? parsed.p[3] : 0
+        }
+      };
+    }
+
+    // If parsed is in standard format (answered, positions):
+    if (parsed.answered || parsed.positions) {
+      return parsed;
+    }
 
     return null;
   }

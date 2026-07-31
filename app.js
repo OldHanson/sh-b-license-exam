@@ -1169,6 +1169,30 @@
   }
 
   // ==================== MOCK EXAM MULTI-DEVICE SYNC ENGINE ====================
+  function safeBase64Encode(str) {
+    try {
+      return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (match, p1) => {
+        return String.fromCharCode('0x' + p1);
+      }));
+    } catch (e) {
+      return btoa(str);
+    }
+  }
+
+  function safeBase64Decode(str) {
+    try {
+      return decodeURIComponent(Array.prototype.map.call(atob(str), (c) => {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+      }).join(''));
+    } catch (e) {
+      try {
+        return decodeURIComponent(atob(str));
+      } catch (e2) {
+        return atob(str);
+      }
+    }
+  }
+
   function encodeExamSyncState() {
     const records = getExamRecords();
     const payload = {
@@ -1181,44 +1205,52 @@
         time: currentExam.timeRemaining
       } : null
     };
-    return 'BEXAM2_' + btoa(encodeURIComponent(JSON.stringify(payload)));
+    return 'BEXAM2_' + safeBase64Encode(JSON.stringify(payload));
   }
 
   function decodeExamSyncState(codeStr) {
     if (!codeStr) return null;
     let clean = codeStr.trim().replace(/\s+/g, '');
 
-    // Case 1: Ultra-compact BEXAM2_ format
-    if (clean.startsWith('BEXAM2_')) {
-      try {
-        const raw = clean.substring(7);
-        const jsonStr = decodeURIComponent(atob(raw));
-        const payload = JSON.parse(jsonStr);
-        if (payload && payload.v === 2) return payload;
-      } catch (e) { console.error('BEXAM2 decode error:', e); }
+    // Strip prefix if any (e.g. BEXAM2_, BEXAM1_, BEXAM_)
+    let payloadStr = clean;
+    if (clean.includes('_')) {
+      payloadStr = clean.substring(clean.indexOf('_') + 1);
     }
 
-    // Case 2: Standard Base64
+    let parsed = null;
+
+    // Try 1: safeBase64Decode
     try {
-      const jsonStr = decodeURIComponent(atob(clean));
-      const obj = JSON.parse(jsonStr);
-      if (obj && typeof obj === 'object') return obj;
+      const raw = safeBase64Decode(payloadStr);
+      parsed = JSON.parse(raw);
     } catch (e) {}
 
-    // Case 3: Direct Base64
-    try {
-      const jsonStr = atob(clean);
-      const obj = JSON.parse(jsonStr);
-      if (obj && typeof obj === 'object') return obj;
-    } catch (e) {}
+    // Try 2: decodeURIComponent(atob)
+    if (!parsed) {
+      try {
+        const raw = decodeURIComponent(atob(payloadStr));
+        parsed = JSON.parse(raw);
+      } catch (e) {}
+    }
 
-    // Case 4: Raw JSON
-    try {
-      const obj = JSON.parse(codeStr.trim());
-      if (obj && typeof obj === 'object') return obj;
-    } catch (e) {}
+    // Try 3: direct atob
+    if (!parsed) {
+      try {
+        const raw = atob(payloadStr);
+        parsed = JSON.parse(raw);
+      } catch (e) {}
+    }
 
-    return null;
+    // Try 4: raw codeStr JSON
+    if (!parsed) {
+      try {
+        parsed = JSON.parse(codeStr.trim());
+      } catch (e) {}
+    }
+
+    if (!parsed || typeof parsed !== 'object') return null;
+    return parsed;
   }
 
   function mergeExamSyncData(incoming) {
