@@ -30,22 +30,26 @@
             <i class="fa-regular fa-clock"></i>
             <span class="timer-label">剩余时间</span>
             <span class="timer-value" id="timerDisplay">90:00</span>
+            <button class="btn-reset-timer" id="btnResetTimer" title="刷新/重置考试时间为 90分钟">
+              <i class="fa-solid fa-rotate-right"></i>
+            </button>
           </div>
 
           <!-- Switch to Sequential Practice Mode -->
           <a href="顺序练习.html" class="btn btn-secondary" title="进入顺序刷题模式">
-            <i class="fa-solid fa-book-open"></i> 顺序刷题模式
+            <i class="fa-solid fa-book-open"></i> 顺序刷题
           </a>
+
+          <!-- History Records Button -->
+          <button class="btn btn-secondary" id="btnExamHistory" title="查看考试记录与数据分析">
+            <i class="fa-solid fa-chart-line"></i> 考试记录
+            <span class="badge-count" id="recordCountBadge">0</span>
+          </button>
 
           <!-- Answer Sheet Button -->
           <button class="btn btn-outline" id="btnToggleSheet" title="查看答题卡">
             <i class="fa-solid fa-border-all"></i> 答题卡
             <span class="badge-count" id="answeredBadge">0/100</span>
-          </button>
-
-          <!-- Refresh Exam Button -->
-          <button class="btn btn-secondary" id="btnRefreshExam" title="重新抽取考题">
-            <i class="fa-solid fa-arrows-rotate"></i> 换一套题
           </button>
 
           <!-- Submit Button -->
@@ -61,19 +65,31 @@
 
       <!-- EXAM IN PROGRESS VIEW -->
       <section id="examView" class="view-section active">
-        <!-- Exam Info Bar -->
+        <!-- Exam Info Bar & Paper Selector -->
         <div class="exam-info-bar">
+          <div class="paper-select-wrapper">
+            <label for="paperSelect"><i class="fa-solid fa-file-signature"></i> 切换模拟试卷：</label>
+            <select id="paperSelect" class="paper-select-dropdown">
+              <option value="1">模拟试卷 01</option>
+              <option value="2">模拟试卷 02</option>
+              <option value="3">模拟试卷 03</option>
+              <option value="4">模拟试卷 04</option>
+              <option value="5">模拟试卷 05</option>
+              <option value="6">模拟试卷 06</option>
+              <option value="7">模拟试卷 07</option>
+              <option value="8">模拟试卷 08</option>
+              <option value="9">模拟试卷 09</option>
+              <option value="10">模拟试卷 10</option>
+            </select>
+          </div>
+
           <div class="info-item">
             <i class="fa-solid fa-list-check"></i>
-            <span>题量：<strong>100题</strong></span>
+            <span>题量：<strong>100题 (无重复)</strong></span>
           </div>
           <div class="info-item">
             <i class="fa-solid fa-sliders"></i>
             <span>分布：<strong>单选40题 | 多选20题 | 判断40题</strong></span>
-          </div>
-          <div class="info-item">
-            <i class="fa-solid fa-award"></i>
-            <span>评分规则：<strong>单选1分/题，多选错选0分/少选选对各得0.5分，判断0.5分/题</strong></span>
           </div>
         </div>
 
@@ -124,8 +140,9 @@
         </div>
       </section>
 
-      <!-- RESULT & SCORE ANALYSIS VIEW -->
+      <!-- RESULT & DETAILED SCORE ANALYTICS VIEW -->
       <section id="resultView" class="view-section">
+        <!-- Hero Score Header -->
         <div class="result-hero-card">
           <div class="score-badge-circle" id="scoreCircle">
             <div class="score-val" id="finalScoreVal">0.0</div>
@@ -138,36 +155,139 @@
             </div>
             <p class="summary-text" id="summaryText">做答完成，用时 0分0秒</p>
 
-            <div class="score-breakdown-grid">
-              <div class="breakdown-card">
-                <span class="bd-title">单选题得分</span>
-                <span class="bd-val" id="singleScoreVal">0.0 / 40.0</span>
-              </div>
-              <div class="breakdown-card">
-                <span class="bd-title">多选题得分</span>
-                <span class="bd-val" id="multiScoreVal">0.0 / [加权]</span>
-              </div>
-              <div class="breakdown-card">
-                <span class="bd-title">判断题得分</span>
-                <span class="bd-val" id="tfScoreVal">0.0 / 20.0</span>
-              </div>
-            </div>
-
             <div class="result-actions">
-              <button class="btn btn-primary btn-lg" id="btnRestartExam">
-                <i class="fa-solid fa-arrows-rotate"></i> 再考一次（重新抽题）
+              <button class="btn btn-primary" id="btnRestartExam">
+                <i class="fa-solid fa-arrows-rotate"></i> 重新作答本卷
+              </button>
+              <button class="btn btn-secondary" id="btnOpenHistoryView">
+                <i class="fa-solid fa-clock-rotate-left"></i> 查看历史考试记录
               </button>
             </div>
           </div>
         </div>
 
-        <!-- Filter and Review List -->
-        <div class="review-section">
+        <!-- DETAILED ANALYTICS DASHBOARD -->
+        <div class="analytics-dashboard-card">
+          <h3 class="dashboard-title"><i class="fa-solid fa-chart-pie"></i> 试卷三维深度数据分析</h3>
+          
+          <div class="analytics-grid">
+            <!-- Single Choice Analytics -->
+            <div class="analytics-card">
+              <div class="card-top">
+                <div class="type-icon single-color"><i class="fa-regular fa-circle-dot"></i></div>
+                <div class="type-name">单选题数据分析</div>
+              </div>
+              <div class="score-rate-row">
+                <span class="rate-label">得分率</span>
+                <span class="rate-val" id="singleScoreRateVal">0.0%</span>
+              </div>
+              <div class="stat-progress-bar">
+                <div class="fill" id="singleScoreFill" style="width: 0%;"></div>
+              </div>
+              <div class="stat-metrics-list">
+                <div class="metric-item">
+                  <span>正确题数：</span>
+                  <strong id="singleCorrectText">0 / 40 题</strong>
+                </div>
+                <div class="metric-item">
+                  <span>单选得分：</span>
+                  <strong id="singleScoreVal">0.0 / 40.0 分</strong>
+                </div>
+              </div>
+            </div>
+
+            <!-- Multiple Choice Analytics (3-Way Split!) -->
+            <div class="analytics-card">
+              <div class="card-top">
+                <div class="type-icon multi-color"><i class="fa-regular fa-square-check"></i></div>
+                <div class="type-name">多选题数据分析 (分拆统计)</div>
+              </div>
+              <div class="score-rate-row">
+                <span class="rate-label">得分率</span>
+                <span class="rate-val" id="multiScoreRateVal">0.0%</span>
+              </div>
+              <div class="stat-progress-bar">
+                <div class="fill multi-bg" id="multiScoreFill" style="width: 0%;"></div>
+              </div>
+              <div class="stat-metrics-list">
+                <div class="metric-item">
+                  <span>全对数量 (正确):</span>
+                  <strong class="text-success" id="multiCorrectText">0 题 (0.0%)</strong>
+                </div>
+                <div class="metric-item">
+                  <span>漏选数量 (少选):</span>
+                  <strong class="text-warning" id="multiMissedText">0 题 (0.0%)</strong>
+                </div>
+                <div class="metric-item">
+                  <span>错选数量 (选错):</span>
+                  <strong class="text-danger" id="multiWrongText">0 题 (0.0%)</strong>
+                </div>
+                <div class="metric-item" style="border-top: 1px dashed var(--border-color); padding-top: 6px;">
+                  <span>多选得分：</span>
+                  <strong id="multiScoreVal">0.0 / 40.0 分</strong>
+                </div>
+              </div>
+            </div>
+
+            <!-- True/False Choice Analytics -->
+            <div class="analytics-card">
+              <div class="card-top">
+                <div class="type-icon tf-color"><i class="fa-solid fa-scale-balanced"></i></div>
+                <div class="type-name">判断题数据分析</div>
+              </div>
+              <div class="score-rate-row">
+                <span class="rate-label">得分率</span>
+                <span class="rate-val" id="tfScoreRateVal">0.0%</span>
+              </div>
+              <div class="stat-progress-bar">
+                <div class="fill tf-bg" id="tfScoreFill" style="width: 0%;"></div>
+              </div>
+              <div class="stat-metrics-list">
+                <div class="metric-item">
+                  <span>正确题数：</span>
+                  <strong id="tfCorrectText">0 / 40 题</strong>
+                </div>
+                <div class="metric-item">
+                  <span>判断得分：</span>
+                  <strong id="tfScoreVal">0.0 / 20.0 分</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- EXAM-SPECIFIC WRONG QUESTIONS SECTION (With Category Filter) -->
+        <div class="exam-wrong-section" id="examWrongSection">
+          <div class="exam-wrong-header">
+            <h3><i class="fa-solid fa-triangle-exclamation"></i> 本套试卷专属错题集 (<span id="examWrongTotalCount">0</span> 题)</h3>
+            <div class="exam-wrong-filter-bar">
+              <button class="exam-filter-btn active" data-exam-filter="all">
+                全部错题 (<span id="filterCountAll">0</span>)
+              </button>
+              <button class="exam-filter-btn" data-exam-filter="single">
+                单选题 (<span id="filterCountSingle">0</span>)
+              </button>
+              <button class="exam-filter-btn" data-exam-filter="multiple">
+                多选题 (<span id="filterCountMultiple">0</span>)
+              </button>
+              <button class="exam-filter-btn" data-exam-filter="tf">
+                判断题 (<span id="filterCountTF">0</span>)
+              </button>
+            </div>
+          </div>
+
+          <div class="review-list" id="examWrongReviewList">
+            <!-- Wrong items dynamically generated -->
+          </div>
+        </div>
+
+        <!-- Full Review List Container -->
+        <div class="review-section" style="margin-top: 24px;">
           <div class="review-header">
-            <h3><i class="fa-solid fa-clipboard-list"></i> 试卷逐题解析与对错统计</h3>
+            <h3><i class="fa-solid fa-clipboard-list"></i> 试卷全量 100 题逐题解析</h3>
             <div class="filter-btn-group">
-              <button class="filter-btn active" data-filter="all">全部题目 (100)</button>
-              <button class="filter-btn filter-wrong" data-filter="wrong">仅看错题 (<span id="wrongCountVal">0</span>)</button>
+              <button class="filter-btn active" data-filter="all">全量题目 (100)</button>
+              <button class="filter-btn filter-wrong" data-filter="wrong">仅看错题与漏选 (<span id="wrongCountVal">0</span>)</button>
             </div>
           </div>
 
@@ -209,11 +329,44 @@
         </div>
       </div>
     </div>
+
+    <!-- EXAM HISTORY RECORDS MODAL -->
+    <div class="modal-overlay" id="historyModal">
+      <div class="modal-card modal-lg">
+        <div class="modal-header">
+          <h3><i class="fa-solid fa-clock-rotate-left"></i> 模拟考试历史记录与数据档案</h3>
+          <button class="modal-close" id="btnCloseHistory"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">
+          <div class="history-summary-bar">
+            <div class="h-stat-item">
+              <span>累计提交考卷</span>
+              <strong id="hTotalExams">0 套</strong>
+            </div>
+            <div class="h-stat-item">
+              <span>合格卷数</span>
+              <strong class="text-success" id="hPassExams">0 套</strong>
+            </div>
+            <div class="h-stat-item">
+              <span>平均得分</span>
+              <strong id="hAvgScore">0.0 分</strong>
+            </div>
+            <button class="btn btn-sm btn-outline-danger" id="btnClearHistory">
+              <i class="fa-solid fa-trash-can"></i> 清空考试记录
+            </button>
+          </div>
+
+          <div class="history-records-list" id="historyRecordsList">
+            <!-- Records rendered dynamically -->
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Load Question Bank JS -->
-  <script src="questions_bank.js"></script>
+  <script src="questions_bank.js?v=20260731_v3"></script>
   <!-- Load Main Application Logic JS -->
-  <script src="app.js"></script>
+  <script src="app.js?v=20260731_v3"></script>
 </body>
 </html>

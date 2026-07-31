@@ -2675,7 +2675,7 @@ window.QUESTION_BANK = [
       "总监理工程师",
       "项目专职安全生\n产管理人员"
     ],
-    "answer": "A"
+    "answer": "B"
   },
   {
     "id": 207,
@@ -7351,6 +7351,8 @@ window.QUESTION_BANK = [
     ],
     "answer": [
       "B",
+      "C",
+      "D",
       "E"
     ]
   },
@@ -7367,9 +7369,9 @@ window.QUESTION_BANK = [
       "单点集中荷载5KN"
     ],
     "answer": [
-      "B",
-      "D",
-      "E"
+      "A",
+      "C",
+      "D"
     ]
   },
   {
@@ -7944,8 +7946,7 @@ window.QUESTION_BANK = [
     ],
     "answer": [
       "C",
-      "D",
-      "E"
+      "D"
     ]
   },
   {

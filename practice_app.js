@@ -79,8 +79,32 @@
   let tempMultiSelected = [];
   let wrongReviewAnswered = {};
 
+  // Ensure Question Bank is 100% loaded before initializing
+  function ensureBankReady(callback) {
+    if (window.QUESTION_BANK && Array.isArray(window.QUESTION_BANK) && window.QUESTION_BANK.length > 0) {
+      callback();
+      return;
+    }
+
+    let attempts = 0;
+    const timer = setInterval(() => {
+      attempts++;
+      if (window.QUESTION_BANK && Array.isArray(window.QUESTION_BANK) && window.QUESTION_BANK.length > 0) {
+        clearInterval(timer);
+        callback();
+      } else if (attempts >= 50) {
+        clearInterval(timer);
+        alert('题库数据加载超时，请刷新页面。');
+      }
+    }, 100);
+  }
+
   // Initialize
-  init();
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => ensureBankReady(init));
+  } else {
+    ensureBankReady(init);
+  }
 
   function init() {
     loadBankData();
@@ -760,12 +784,30 @@
   }
 
   function decodeProgressState(codeStr) {
+    if (!codeStr) return null;
+    let clean = codeStr.trim().replace(/\s+/g, '');
+
+    // Attempt 1: Standard base64 with URI component
     try {
-      const jsonStr = decodeURIComponent(atob(codeStr.trim()));
-      return JSON.parse(jsonStr);
-    } catch (e) {
-      return null;
-    }
+      const jsonStr = decodeURIComponent(atob(clean));
+      const obj = JSON.parse(jsonStr);
+      if (obj && typeof obj === 'object') return obj;
+    } catch (e) {}
+
+    // Attempt 2: Direct base64 without URI component
+    try {
+      const jsonStr = atob(clean);
+      const obj = JSON.parse(jsonStr);
+      if (obj && typeof obj === 'object') return obj;
+    } catch (e) {}
+
+    // Attempt 3: Raw JSON string
+    try {
+      const obj = JSON.parse(codeStr.trim());
+      if (obj && typeof obj === 'object') return obj;
+    } catch (e) {}
+
+    return null;
   }
 
   function mergeProgressData(incoming) {
@@ -998,12 +1040,27 @@
       }
     });
 
-    btnImportCode.addEventListener('click', () => {
-      const inputCode = prompt('请粘贴您在其他设备上复制的进度暗号：');
+    btnImportCode.addEventListener('click', async () => {
+      let inputCode = '';
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        try {
+          inputCode = await navigator.clipboard.readText();
+        } catch (e) {}
+      }
+
+      if (!inputCode || inputCode.length < 5) {
+        inputCode = prompt('请粘贴您在其他设备上复制的进度暗号：');
+      } else {
+        const confirmPaste = confirm(`系统已自动检测到剪贴板中暗号，是否直接使用导入？\n\n暗号预览：${inputCode.substring(0, 35)}...`);
+        if (!confirmPaste) {
+          inputCode = prompt('请手动粘贴您在其他设备上复制的进度暗号：');
+        }
+      }
+
       if (inputCode) {
         const decoded = decodeProgressState(inputCode);
         if (decoded && mergeProgressData(decoded)) {
-          alert('🎉 成功同步进度！');
+          alert('🎉 成功同步进度！所有做答与错题记录已全量更新。');
           syncModal.classList.remove('active');
         } else if (!decoded) {
           alert('❌ 暗号格式无效，请重新复制后再试！');

@@ -1,5 +1,6 @@
 /**
  * Project Leader B License Online Exam System - Application Logic
+ * Supports 10 Fixed Non-Overlapping Exam Papers & Detailed Analytics
  */
 
 (function () {
@@ -7,12 +8,14 @@
 
   // Constants & Config
   const TOTAL_EXAM_TIME = 90 * 60; // 90 minutes in seconds
-  const STORAGE_KEY = 'b_license_exam_state';
+  const EXAM_STATE_KEY = 'b_license_exam_state';
+  const EXAM_RECORDS_KEY = 'b_license_exam_records';
 
   // Application State
   let currentExam = {
+    paperNumber: 1,
     questions: [], // 100 items: 40 single, 20 multiple, 40 tf
-    userAnswers: {}, // { [index]: answerValue }  Single/TF: "A", Multiple: ["A", "C"]
+    userAnswers: {}, // { [index]: answerValue }
     marked: {}, // { [index]: true/false }
     startTime: null,
     timeRemaining: TOTAL_EXAM_TIME,
@@ -22,14 +25,18 @@
 
   let currentIndex = 0;
   let timerInterval = null;
+  let examWrongFilter = 'all';
 
   // DOM Elements
   const examView = document.getElementById('examView');
   const resultView = document.getElementById('resultView');
   const timerDisplay = document.getElementById('timerDisplay');
   const timerBox = document.getElementById('timerBox');
+  const btnResetTimer = document.getElementById('btnResetTimer');
   const answeredBadge = document.getElementById('answeredBadge');
-  
+  const recordCountBadge = document.getElementById('recordCountBadge');
+  const paperSelect = document.getElementById('paperSelect');
+
   // Question Card Elements
   const qNumTag = document.getElementById('qNumTag');
   const qTypeTag = document.getElementById('qTypeTag');
@@ -48,7 +55,6 @@
   const btnCloseSheet = document.getElementById('btnCloseSheet');
   const btnSubmitFromSheet = document.getElementById('btnSubmitFromSheet');
   const btnSubmitExam = document.getElementById('btnSubmitExam');
-  const btnRefreshExam = document.getElementById('btnRefreshExam');
 
   const sheetGridSingle = document.getElementById('sheetGridSingle');
   const sheetGridMulti = document.getElementById('sheetGridMulti');
@@ -60,74 +66,194 @@
   const passStatusBanner = document.getElementById('passStatusBanner');
   const passStatusText = document.getElementById('passStatusText');
   const summaryText = document.getElementById('summaryText');
-  const singleScoreVal = document.getElementById('singleScoreVal');
-  const multiScoreVal = document.getElementById('multiScoreVal');
-  const tfScoreVal = document.getElementById('tfScoreVal');
   const btnRestartExam = document.getElementById('btnRestartExam');
+  const btnOpenHistoryView = document.getElementById('btnOpenHistoryView');
+  const btnExamHistory = document.getElementById('btnExamHistory');
+
+  // Analytics Elements
+  const singleScoreVal = document.getElementById('singleScoreVal');
+  const singleScoreRateVal = document.getElementById('singleScoreRateVal');
+  const singleScoreFill = document.getElementById('singleScoreFill');
+  const singleCorrectText = document.getElementById('singleCorrectText');
+
+  const multiScoreVal = document.getElementById('multiScoreVal');
+  const multiScoreRateVal = document.getElementById('multiScoreRateVal');
+  const multiScoreFill = document.getElementById('multiScoreFill');
+  const multiCorrectText = document.getElementById('multiCorrectText');
+  const multiMissedText = document.getElementById('multiMissedText');
+  const multiWrongText = document.getElementById('multiWrongText');
+
+  const tfScoreVal = document.getElementById('tfScoreVal');
+  const tfScoreRateVal = document.getElementById('tfScoreRateVal');
+  const tfScoreFill = document.getElementById('tfScoreFill');
+  const tfCorrectText = document.getElementById('tfCorrectText');
+
+  // Exam Wrong Questions Elements
+  const examWrongTotalCount = document.getElementById('examWrongTotalCount');
+  const examWrongReviewList = document.getElementById('examWrongReviewList');
+  const filterCountAll = document.getElementById('filterCountAll');
+  const filterCountSingle = document.getElementById('filterCountSingle');
+  const filterCountMultiple = document.getElementById('filterCountMultiple');
+  const filterCountTF = document.getElementById('filterCountTF');
+  const examFilterBtns = document.querySelectorAll('.exam-filter-btn');
+
+  // Review List Elements
   const reviewList = document.getElementById('reviewList');
   const wrongCountVal = document.getElementById('wrongCountVal');
+
+  // History Modal Elements
+  const historyModal = document.getElementById('historyModal');
+  const btnCloseHistory = document.getElementById('btnCloseHistory');
+  const hTotalExams = document.getElementById('hTotalExams');
+  const hPassExams = document.getElementById('hPassExams');
+  const hAvgScore = document.getElementById('hAvgScore');
+  const btnClearHistory = document.getElementById('btnClearHistory');
+  const historyRecordsList = document.getElementById('historyRecordsList');
 
   // Tab Buttons
   const tabBtns = document.querySelectorAll('.category-tabs .tab-btn');
   const filterBtns = document.querySelectorAll('.filter-btn');
 
-  // Initialize System
-  init();
+  // Ensure Question Bank is 100% loaded before initializing
+  function ensureBankReady(callback) {
+    if (window.QUESTION_BANK && Array.isArray(window.QUESTION_BANK) && window.QUESTION_BANK.length > 0) {
+      callback();
+      return;
+    }
+
+    let attempts = 0;
+    const timer = setInterval(() => {
+      attempts++;
+      if (window.QUESTION_BANK && Array.isArray(window.QUESTION_BANK) && window.QUESTION_BANK.length > 0) {
+        clearInterval(timer);
+        callback();
+      } else if (attempts >= 50) {
+        clearInterval(timer);
+        alert('题库数据加载超时，请检查文件权限或刷新页面。');
+      }
+    }, 100);
+  }
+
+  // Safe localStorage Wrappers for Safari file:// protocol compatibility
+  function safeGetItem(key) {
+    try {
+      return localStorage.getItem(key);
+    } catch (e) {
+      console.warn('localStorage getItem blocked:', e);
+      return null;
+    }
+  }
+
+  function safeSetItem(key, value) {
+    try {
+      localStorage.setItem(key, value);
+    } catch (e) {
+      console.warn('localStorage setItem blocked:', e);
+    }
+  }
+
+  function safeRemoveItem(key) {
+    try {
+      localStorage.removeItem(key);
+    } catch (e) {
+      console.warn('localStorage removeItem blocked:', e);
+    }
+  }
+
+  // Validate Exam Question Objects
+  function isValidExamQuestions(questions) {
+    if (!Array.isArray(questions) || questions.length !== 100) return false;
+    return questions[0] && questions[0].prompt && questions[99] && questions[99].prompt;
+  }
+
+  // Initialize System on DOM Ready & Bank Ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => ensureBankReady(init));
+  } else {
+    ensureBankReady(init);
+  }
 
   function init() {
-    // Try to load state from localStorage or start new exam
-    const savedState = localStorage.getItem(STORAGE_KEY);
+    updateRecordCountBadge();
+    setupEventListeners();
+
+    let loadedState = false;
+    const savedState = safeGetItem(EXAM_STATE_KEY);
+
     if (savedState) {
       try {
         const parsed = JSON.parse(savedState);
-        if (parsed && parsed.questions && parsed.questions.length === 100 && !parsed.isSubmitted) {
+        if (parsed && isValidExamQuestions(parsed.questions) && !parsed.isSubmitted) {
           currentExam = parsed;
-        } else {
-          startNewExam();
+          if (paperSelect) paperSelect.value = currentExam.paperNumber || 1;
+          loadedState = true;
         }
       } catch (e) {
-        startNewExam();
+        loadedState = false;
       }
-    } else {
-      startNewExam();
     }
 
-    setupEventListeners();
-    startTimer();
-    renderCurrentQuestion();
-    updateAnsweredCount();
+    if (!loadedState) {
+      safeRemoveItem(EXAM_STATE_KEY);
+      startNewExam(1);
+    } else {
+      startTimer();
+      renderCurrentQuestion();
+      updateAnsweredCount();
+    }
   }
 
-  // Shuffle Array Helper
-  function shuffle(array) {
+  // Deterministic Seeded Shuffle Function (Fixed per paper)
+  function seededShuffle(array, seed) {
+    if (!Array.isArray(array)) return [];
     const arr = [...array];
+    let s = seed || 12345;
+    function rand() {
+      s = (s ^ 0x6D2B79F5) + 0x6D2B79F5;
+      let t = Math.imul(s ^ (s >>> 15), 1 | s);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    }
     for (let i = arr.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
+      const j = Math.floor(rand() * (i + 1));
       [arr[i], arr[j]] = [arr[j], arr[i]];
     }
     return arr;
   }
 
-  // Start New Exam (Randomly Sample 40 Single, 20 Multiple, 40 TF)
-  function startNewExam() {
+  // Get fixed non-overlapping questions for paperNumber (1 to 10) with deterministic fixed shuffling
+  function getExamPaperQuestions(paperNum) {
     const rawBank = window.QUESTION_BANK || [];
-    
-    const singles = rawBank.filter(q => q.category === 'single');
-    const multiples = rawBank.filter(q => q.category === 'multiple');
-    const tfs = rawBank.filter(q => q.category === 'tf');
 
-    const sampledSingles = shuffle(singles).slice(0, 40);
-    const sampledMultiples = shuffle(multiples).slice(0, 20);
-    const sampledTFs = shuffle(tfs).slice(0, 40);
+    const singles = rawBank.filter(q => q.category === 'single' || q.typeName === '单选题');
+    const multiples = rawBank.filter(q => q.category === 'multiple' || q.typeName === '多选题');
+    const tfs = rawBank.filter(q => q.category === 'tf' || q.typeName === '判断题');
 
-    // Combine in standard exam section order: Single (0..39), Multi (40..59), TF (60..99)
-    const questions = [
-      ...sampledSingles,
-      ...sampledMultiples,
-      ...sampledTFs
+    const idx = Math.max(0, Math.min(9, paperNum - 1));
+
+    // Partition non-overlapping sets for this paper
+    const paperSingles = singles.slice(idx * 40, (idx + 1) * 40);
+    const paperMultiples = multiples.slice(idx * 20, (idx + 1) * 20);
+    const paperTFs = tfs.slice(idx * 40, (idx + 1) * 40);
+
+    // Fixed deterministic shuffle based on paper number seed so paper order is stable & persistent
+    const shuffledSingles = seededShuffle(paperSingles, paperNum * 1000 + 1);
+    const shuffledMultiples = seededShuffle(paperMultiples, paperNum * 1000 + 2);
+    const shuffledTFs = seededShuffle(paperTFs, paperNum * 1000 + 3);
+
+    return [
+      ...shuffledSingles,
+      ...shuffledMultiples,
+      ...shuffledTFs
     ];
+  }
+
+  // Start New Exam for specified paper number
+  function startNewExam(paperNum = 1) {
+    const questions = getExamPaperQuestions(paperNum);
 
     currentExam = {
+      paperNumber: paperNum,
       questions: questions,
       userAnswers: {},
       marked: {},
@@ -137,19 +263,23 @@
       scoreResult: null
     };
 
+    if (paperSelect) paperSelect.value = paperNum;
     currentIndex = 0;
     saveState();
 
     // Switch view back to exam
     resultView.classList.remove('active');
     examView.classList.add('active');
+
+    renderCurrentQuestion();
+    updateAnsweredCount();
   }
 
   function saveState() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(currentExam));
+    safeSetItem(EXAM_STATE_KEY, JSON.stringify(currentExam));
   }
 
-  // Timer Management
+  // Timer Control Functions
   function startTimer() {
     if (timerInterval) clearInterval(timerInterval);
 
@@ -160,19 +290,13 @@
       }
 
       currentExam.timeRemaining--;
+      saveState();
+      updateTimerDisplay();
 
       if (currentExam.timeRemaining <= 0) {
-        currentExam.timeRemaining = 0;
         clearInterval(timerInterval);
-        alert('⏰ 考试时间到！系统已为您自动提交试卷。');
+        alert('考试时间到！系统已为您自动提交试卷。');
         submitExam();
-        return;
-      }
-
-      updateTimerDisplay();
-      // Save state every 10 seconds
-      if (currentExam.timeRemaining % 10 === 0) {
-        saveState();
       }
     }, 1000);
 
@@ -180,12 +304,13 @@
   }
 
   function updateTimerDisplay() {
-    const m = Math.floor(currentExam.timeRemaining / 60);
-    const s = currentExam.timeRemaining % 60;
-    const str = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-    timerDisplay.textContent = str;
+    const minutes = Math.floor(currentExam.timeRemaining / 60);
+    const seconds = currentExam.timeRemaining % 60;
 
-    if (currentExam.timeRemaining <= 300) { // 5 minutes remaining
+    const formattedTime = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    timerDisplay.textContent = formattedTime;
+
+    if (currentExam.timeRemaining <= 600) {
       timerBox.classList.add('warning');
     } else {
       timerBox.classList.remove('warning');
@@ -194,97 +319,116 @@
 
   // Render Current Question
   function renderCurrentQuestion() {
-    if (!currentExam.questions || currentExam.questions.length === 0) return;
+    try {
+      if (!currentExam.questions || currentExam.questions.length !== 100) {
+        startNewExam(currentExam.paperNumber || 1);
+        return;
+      }
 
-    const q = currentExam.questions[currentIndex];
-    
-    // Update Header Tags
-    qNumTag.textContent = `第 ${currentIndex + 1} 题`;
-    
-    if (q.category === 'single') {
-      qTypeTag.textContent = '单选题';
-      qScoreTag.textContent = '1.0 分';
-      updateTabActive('single');
-    } else if (q.category === 'multiple') {
-      qTypeTag.textContent = '多选题';
-      qScoreTag.textContent = '少选各0.5分';
-      updateTabActive('multiple');
-    } else {
-      qTypeTag.textContent = '判断题';
-      qScoreTag.textContent = '0.5 分';
-      updateTabActive('tf');
-    }
+      if (currentIndex < 0) currentIndex = 0;
+      if (currentIndex >= currentExam.questions.length) currentIndex = currentExam.questions.length - 1;
 
-    // Update Mark Button
-    const isMarked = currentExam.marked[currentIndex];
-    if (isMarked) {
-      btnMarkCurrent.classList.add('marked');
-      markBtnText.textContent = '已标记';
-    } else {
-      btnMarkCurrent.classList.remove('marked');
-      markBtnText.textContent = '标记疑难';
-    }
+      const q = currentExam.questions[currentIndex];
+      if (!q || !q.prompt) {
+        startNewExam(currentExam.paperNumber || 1);
+        return;
+      }
 
-    // Update Title
-    qTitle.textContent = `${currentIndex + 1}. ${q.prompt}`;
+      const userAns = currentExam.userAnswers[currentIndex];
+      const isMarked = currentExam.marked[currentIndex];
 
-    // Render Options
-    optionsContainer.innerHTML = '';
-    const userAns = currentExam.userAnswers[currentIndex];
+      // Determine category and set active tab
+      let sectionName = '一、单选题';
+      let scoreText = '1.0 分';
 
-    if (q.category === 'tf' || q.typeName === '判断题') {
-      const opts = ['正确', '错误'];
-      opts.forEach((optText, i) => {
-        const key = i === 0 ? 'A' : 'B';
-        const isSelected = userAns === key || (key === 'A' && userAns === '正确') || (key === 'B' && userAns === '错误');
-        const optEl = document.createElement('div');
-        optEl.className = 'option-item' + (isSelected ? ' selected' : '');
-        optEl.innerHTML = `
-          <div class="option-key">${key}</div>
-          <div class="option-text">${optText}</div>
-        `;
-        optEl.addEventListener('click', () => selectAnswer(key));
-        optionsContainer.appendChild(optEl);
-      });
-    } else {
-      // Single or Multiple
-      const labels = ['A', 'B', 'C', 'D', 'E'];
-      q.options.forEach((optText, i) => {
-        const key = labels[i] || String.fromCharCode(65 + i);
-        const isSelected = q.category === 'multiple' || q.typeName === '多选题'
-          ? (Array.isArray(userAns) && userAns.includes(key))
-          : (userAns === key);
+      if (currentIndex >= 40 && currentIndex < 60) {
+        sectionName = '二、多选题';
+        scoreText = '2.0 分';
+        updateTabActive('multiple');
+      } else if (currentIndex >= 60) {
+        sectionName = '三、判断题';
+        scoreText = '0.5 分';
+        updateTabActive('tf');
+      } else {
+        updateTabActive('single');
+      }
 
-        const optEl = document.createElement('div');
-        optEl.className = 'option-item' + (isSelected ? ' selected' : '');
-        optEl.innerHTML = `
-          <div class="option-key">${key}</div>
-          <div class="option-text">${optText}</div>
-        `;
+      qNumTag.textContent = `第 ${currentIndex + 1} 题`;
+      qTypeTag.textContent = q.typeName || (q.category === 'multiple' ? '多选题' : (q.category === 'tf' ? '判断题' : '单选题'));
+      qScoreTag.textContent = scoreText;
 
-        optEl.addEventListener('click', () => {
-          if (q.category === 'multiple' || q.typeName === '多选题') {
-            let currentList = Array.isArray(userAns) ? [...userAns] : [];
-            if (currentList.includes(key)) {
-              currentList = currentList.filter(k => k !== key);
-            } else {
-              currentList.push(key);
-              currentList.sort();
-            }
-            selectAnswer(currentList);
-          } else {
-            selectAnswer(key);
-          }
+      if (isMarked) {
+        btnMarkCurrent.classList.add('active');
+        markBtnText.textContent = '已标记';
+      } else {
+        btnMarkCurrent.classList.remove('active');
+        markBtnText.textContent = '标记疑难';
+      }
+
+      qTitle.textContent = `${currentIndex + 1}. ${q.prompt}`;
+
+      // Render Options
+      optionsContainer.innerHTML = '';
+
+      if (q.category === 'tf' || q.typeName === '判断题') {
+        const opts = ['正确', '错误'];
+        opts.forEach((optText, i) => {
+          const key = i === 0 ? 'A' : 'B';
+          const isSelected = userAns === key || (key === 'A' && userAns === '正确') || (key === 'B' && userAns === '错误');
+          const optEl = document.createElement('div');
+          optEl.className = 'option-item' + (isSelected ? ' selected' : '');
+          optEl.innerHTML = `
+            <div class="option-key">${key}</div>
+            <div class="option-text">${optText}</div>
+          `;
+          optEl.addEventListener('click', () => selectAnswer(key));
+          optionsContainer.appendChild(optEl);
         });
+      } else {
+        // Single or Multiple
+        const labels = ['A', 'B', 'C', 'D', 'E'];
+        const optsList = Array.isArray(q.options) ? q.options : [];
+        optsList.forEach((optText, i) => {
+          const key = labels[i] || String.fromCharCode(65 + i);
+          const isSelected = (q.category === 'multiple' || q.typeName === '多选题')
+            ? (Array.isArray(userAns) && userAns.includes(key))
+            : (userAns === key);
 
-        optionsContainer.appendChild(optEl);
-      });
+          const optEl = document.createElement('div');
+          optEl.className = 'option-item' + (isSelected ? ' selected' : '');
+          optEl.innerHTML = `
+            <div class="option-key">${key}</div>
+            <div class="option-text">${optText}</div>
+          `;
+
+          optEl.addEventListener('click', () => {
+            if (q.category === 'multiple' || q.typeName === '多选题') {
+              let currentList = Array.isArray(userAns) ? [...userAns] : [];
+              if (currentList.includes(key)) {
+                currentList = currentList.filter(k => k !== key);
+              } else {
+                currentList.push(key);
+                currentList.sort();
+              }
+              selectAnswer(currentList);
+            } else {
+              selectAnswer(key);
+            }
+          });
+
+          optionsContainer.appendChild(optEl);
+        });
+      }
+
+      // Update Footer Navigation
+      jumpText.textContent = `${currentIndex + 1} / 100`;
+      btnPrevQ.disabled = currentIndex === 0;
+      btnNextQ.disabled = currentIndex === currentExam.questions.length - 1;
+    } catch (err) {
+      console.error('Error rendering current question, recovering...', err);
+      localStorage.removeItem(EXAM_STATE_KEY);
+      startNewExam(1);
     }
-
-    // Update Footer Navigation
-    jumpText.textContent = `${currentIndex + 1} / 100`;
-    btnPrevQ.disabled = currentIndex === 0;
-    btnNextQ.disabled = currentIndex === currentExam.questions.length - 1;
   }
 
   function selectAnswer(ansValue) {
@@ -327,7 +471,7 @@
       btn.textContent = idx + 1;
 
       if (idx === currentIndex) btn.classList.add('current');
-      
+
       const userAns = currentExam.userAnswers[idx];
       const isAnswered = Array.isArray(userAns) ? userAns.length > 0 : (userAns !== undefined && userAns !== '');
       if (isAnswered) btn.classList.add('answered');
@@ -349,14 +493,22 @@
     });
   }
 
-  // Scoring Logic Implementation
+  // Scoring & Comprehensive Analytics Calculation
   function calculateScore() {
     let singleScore = 0;
-    let multiScore = 0;
-    let tfScore = 0;
-    let wrongCount = 0;
+    let singleCorrectCount = 0;
 
+    let multiScore = 0;
+    let multiCorrectCount = 0; // 全对
+    let multiMissedCount = 0;  // 漏选
+    let multiWrongCount = 0;   // 错选
+
+    let tfScore = 0;
+    let tfCorrectCount = 0;
+
+    let wrongCount = 0;
     const reviewDetails = [];
+    const examWrongQuestions = [];
 
     currentExam.questions.forEach((q, idx) => {
       const userAns = currentExam.userAnswers[idx];
@@ -368,8 +520,10 @@
           itemScore = 1.0;
           status = 'correct';
           singleScore += 1.0;
+          singleCorrectCount++;
         } else {
           wrongCount++;
+          examWrongQuestions.push({ index: idx, question: q, userAns, status: 'wrong' });
         }
       } else if (q.category === 'tf' || q.typeName === '判断题') {
         const normalizedUserAns = userAns === '正确' ? 'A' : (userAns === '错误' ? 'B' : userAns);
@@ -378,14 +532,12 @@
           itemScore = 0.5;
           status = 'correct';
           tfScore += 0.5;
+          tfCorrectCount++;
         } else {
           wrongCount++;
+          examWrongQuestions.push({ index: idx, question: q, userAns, status: 'wrong' });
         }
       } else if (q.category === 'multiple' || q.typeName === '多选题') {
-        // Multiple Choice (2.0 pts per question, 20 items = 40.0 pts)
-        // Extra/wrong option -> 0 pts
-        // All correct options selected & no wrong option -> 2.0 pts
-        // Partial correct options selected & no wrong option -> 0.5 pts per correct option (max 1.5)
         let correctArr = Array.isArray(q.answer) ? q.answer : (typeof q.answer === 'string' ? q.answer.split('') : []);
         let userArr = Array.isArray(userAns) ? userAns : (typeof userAns === 'string' ? userAns.split('') : []);
 
@@ -407,16 +559,21 @@
           itemScore = 0.0;
           status = 'wrong';
           wrongCount++;
+          multiWrongCount++;
+          examWrongQuestions.push({ index: idx, question: q, userAns, status: 'wrong' });
         } else if (correctCount === correctSet.size && userSet.size === correctSet.size) {
           // All correct!
           itemScore = 2.0;
           status = 'correct';
           multiScore += itemScore;
+          multiCorrectCount++;
         } else {
           // Partial correct (漏选)
           itemScore = Math.min(1.5, correctCount * 0.5);
           status = 'partial';
           multiScore += itemScore;
+          multiMissedCount++;
+          examWrongQuestions.push({ index: idx, question: q, userAns, status: 'partial' });
         }
       }
 
@@ -430,26 +587,46 @@
       });
     });
 
-    const totalScore = singleScore + multiScore + tfScore;
+    const totalScoreNum = singleScore + multiScore + tfScore;
     const timeUsedSeconds = TOTAL_EXAM_TIME - currentExam.timeRemaining;
 
     return {
-      totalScore: totalScore.toFixed(1),
+      totalScore: totalScoreNum.toFixed(1),
       singleScore: singleScore.toFixed(1),
+      singleCorrectCount,
+      singleCorrectRate: ((singleCorrectCount / 40) * 100).toFixed(1),
+      singleScoreRate: ((singleScore / 40.0) * 100).toFixed(1),
+
       multiScore: multiScore.toFixed(1),
+      multiCorrectCount,
+      multiCorrectRate: ((multiCorrectCount / 20) * 100).toFixed(1),
+      multiMissedCount,
+      multiMissedRate: ((multiMissedCount / 20) * 100).toFixed(1),
+      multiWrongCount,
+      multiWrongRate: ((multiWrongCount / 20) * 100).toFixed(1),
+      multiScoreRate: ((multiScore / 40.0) * 100).toFixed(1),
+
       tfScore: tfScore.toFixed(1),
-      wrongCount: wrongCount,
-      timeUsedSeconds: timeUsedSeconds,
+      tfCorrectCount,
+      tfCorrectRate: ((tfCorrectCount / 40) * 100).toFixed(1),
+      tfScoreRate: ((tfScore / 20.0) * 100).toFixed(1),
+
+      wrongCount,
+      timeUsedSeconds,
+      examWrongQuestions,
       details: reviewDetails
     };
   }
 
-  // Submit Exam Function
+  // Submit Exam & Generate Record
   function submitExam() {
     currentExam.isSubmitted = true;
     const res = calculateScore();
     currentExam.scoreResult = res;
     saveState();
+
+    // Generate Exam History Record (Only created upon explicit submission)
+    saveExamHistoryRecord(res);
 
     // Render Result View
     renderResultView(res);
@@ -458,10 +635,49 @@
     sheetModal.classList.remove('active');
   }
 
+  function saveExamHistoryRecord(res) {
+    let records = [];
+    const saved = safeGetItem(EXAM_RECORDS_KEY);
+    if (saved) {
+      try {
+        records = JSON.parse(saved) || [];
+      } catch (e) { records = []; }
+    }
+
+    const record = {
+      id: 'record_' + Date.now(),
+      paperNumber: currentExam.paperNumber || 1,
+      paperName: `模拟试卷 ${String(currentExam.paperNumber || 1).padStart(2, '0')}`,
+      submitTime: new Date().toLocaleString('zh-CN'),
+      timeUsedSeconds: res.timeUsedSeconds,
+      totalScore: res.totalScore,
+      isPass: parseFloat(res.totalScore) >= 60.0,
+      res: res
+    };
+
+    records.unshift(record); // add to top
+    safeSetItem(EXAM_RECORDS_KEY, JSON.stringify(records));
+    updateRecordCountBadge();
+  }
+
+  function getExamRecords() {
+    const saved = safeGetItem(EXAM_RECORDS_KEY);
+    if (!saved) return [];
+    try {
+      return JSON.parse(saved) || [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function updateRecordCountBadge() {
+    const records = getExamRecords();
+    if (recordCountBadge) recordCountBadge.textContent = records.length;
+  }
+
   function renderResultView(res) {
     finalScoreVal.textContent = res.totalScore;
-    
-    // Pass status threshold (standard 60.0)
+
     const isPass = parseFloat(res.totalScore) >= 60.0;
     if (isPass) {
       scoreCircle.className = 'score-badge-circle';
@@ -475,17 +691,102 @@
 
     const min = Math.floor(res.timeUsedSeconds / 60);
     const sec = res.timeUsedSeconds % 60;
-    summaryText.textContent = `考试作答完成！用时 ${min}分${sec}秒，错题：${res.wrongCount} 题`;
+    summaryText.textContent = `模拟试卷 ${String(currentExam.paperNumber || 1).padStart(2, '0')} 作答完成！用时 ${min}分${sec}秒，错题与漏选：${res.wrongCount} 题`;
 
-    singleScoreVal.textContent = `${res.singleScore} / 40.0`;
-    multiScoreVal.textContent = `${res.multiScore} 分`;
-    tfScoreVal.textContent = `${res.tfScore} / 20.0`;
-    wrongCountVal.textContent = res.wrongCount;
+    // Single Analytics
+    if (singleScoreVal) singleScoreVal.textContent = `${res.singleScore} / 40.0 分`;
+    if (singleScoreRateVal) singleScoreRateVal.textContent = `${res.singleScoreRate}%`;
+    if (singleScoreFill) singleScoreFill.style.width = `${res.singleScoreRate}%`;
+    if (singleCorrectText) singleCorrectText.textContent = `${res.singleCorrectCount} / 40 题`;
 
+    // Multi Analytics (3-way split)
+    if (multiScoreVal) multiScoreVal.textContent = `${res.multiScore} / 40.0 分`;
+    if (multiScoreRateVal) multiScoreRateVal.textContent = `${res.multiScoreRate}%`;
+    if (multiScoreFill) multiScoreFill.style.width = `${res.multiScoreRate}%`;
+    if (multiCorrectText) multiCorrectText.textContent = `${res.multiCorrectCount} 题 (${res.multiCorrectRate}%)`;
+    if (multiMissedText) multiMissedText.textContent = `${res.multiMissedCount} 题 (${res.multiMissedRate}%)`;
+    if (multiWrongText) multiWrongText.textContent = `${res.multiWrongCount} 题 (${res.multiWrongRate}%)`;
+
+    // TF Analytics
+    if (tfScoreVal) tfScoreVal.textContent = `${res.tfScore} / 20.0 分`;
+    if (tfScoreRateVal) tfScoreRateVal.textContent = `${res.tfScoreRate}%`;
+    if (tfScoreFill) tfScoreFill.style.width = `${res.tfScoreRate}%`;
+    if (tfCorrectText) tfCorrectText.textContent = `${res.tfCorrectCount} / 40 题`;
+
+    // Exam Wrong Section
+    if (wrongCountVal) wrongCountVal.textContent = res.wrongCount;
+    if (examWrongTotalCount) examWrongTotalCount.textContent = res.wrongCount;
+
+    examWrongFilter = 'all';
+    renderExamWrongSection(res.examWrongQuestions);
     renderReviewList('all', res.details);
   }
 
+  function renderExamWrongSection(wrongQuestions) {
+    if (!examWrongReviewList) return;
+    examWrongReviewList.innerHTML = '';
+
+    const singleWrongs = wrongQuestions.filter(item => item.question.category === 'single');
+    const multiWrongs = wrongQuestions.filter(item => item.question.category === 'multiple');
+    const tfWrongs = wrongQuestions.filter(item => item.question.category === 'tf');
+
+    if (filterCountAll) filterCountAll.textContent = wrongQuestions.length;
+    if (filterCountSingle) filterCountSingle.textContent = singleWrongs.length;
+    if (filterCountMultiple) filterCountMultiple.textContent = multiWrongs.length;
+    if (filterCountTF) filterCountTF.textContent = tfWrongs.length;
+
+    const filtered = wrongQuestions.filter(item => {
+      if (examWrongFilter === 'single' && item.question.category !== 'single') return false;
+      if (examWrongFilter === 'multiple' && item.question.category !== 'multiple') return false;
+      if (examWrongFilter === 'tf' && item.question.category !== 'tf') return false;
+      return true;
+    });
+
+    if (filtered.length === 0) {
+      examWrongReviewList.innerHTML = `
+        <div style="text-align:center; padding: 30px; color: var(--text-muted);">
+          <i class="fa-solid fa-circle-check" style="font-size: 2.5rem; color: var(--success); margin-bottom: 10px;"></i>
+          <p style="font-weight: 600;">该分类下当前没有错题！</p>
+        </div>
+      `;
+      return;
+    }
+
+    filtered.forEach(item => {
+      const q = item.question;
+      const card = document.createElement('div');
+      card.className = `review-item ${item.status}`;
+
+      const statusBadge = item.status === 'partial'
+        ? '<span class="badge-result partial">漏选 (部分选对)</span>'
+        : '<span class="badge-result wrong">回答错误</span>';
+
+      let userAnsStr = Array.isArray(item.userAns) ? item.userAns.join(', ') : (item.userAns || '未作答');
+      let correctAnsStr = Array.isArray(q.answer) ? q.answer.join(', ') : q.answer;
+
+      if (q.category === 'tf') {
+        userAnsStr = item.userAns === 'A' ? 'A (正确)' : (item.userAns === 'B' ? 'B (错误)' : item.userAns || '未作答');
+        correctAnsStr = q.answer === 'A' ? 'A (正确)' : (q.answer === 'B' ? 'B (错误)' : q.answer);
+      }
+
+      card.innerHTML = `
+        <div class="review-item-header">
+          <span style="font-weight: 700;">第 ${item.index + 1} 题 (${q.typeName})</span>
+          ${statusBadge}
+        </div>
+        <div class="review-prompt">${q.prompt}</div>
+        <div class="review-ans-row">
+          <div>您的选择：<strong style="color: #ef4444;">${userAnsStr}</strong></div>
+          <div>正确答案：<strong style="color: #10b981;">${correctAnsStr}</strong></div>
+        </div>
+      `;
+
+      examWrongReviewList.appendChild(card);
+    });
+  }
+
   function renderReviewList(filterType, details) {
+    if (!reviewList) return;
     reviewList.innerHTML = '';
 
     details.forEach(item => {
@@ -498,12 +799,17 @@
 
       const statusBadge = item.status === 'correct'
         ? '<span class="badge-result correct">正确 (+ ' + item.score + '分)</span>'
-        : (item.status === 'partial' 
-            ? '<span class="badge-result partial">部分正确 (+ ' + item.score + '分)</span>'
-            : '<span class="badge-result wrong">答错 (0分)</span>');
+        : (item.status === 'partial'
+          ? '<span class="badge-result partial">部分正确 (+ ' + item.score + '分)</span>'
+          : '<span class="badge-result wrong">答错 (0分)</span>');
 
-      const userAnsStr = Array.isArray(item.userAnswer) ? item.userAnswer.join(', ') : (item.userAnswer || '未作答');
-      const correctAnsStr = Array.isArray(item.correctAnswer) ? item.correctAnswer.join(', ') : item.correctAnswer;
+      let userAnsStr = Array.isArray(item.userAnswer) ? item.userAnswer.join(', ') : (item.userAnswer || '未作答');
+      let correctAnsStr = Array.isArray(item.correctAnswer) ? item.correctAnswer.join(', ') : item.correctAnswer;
+
+      if (item.question.category === 'tf') {
+        userAnsStr = item.userAnswer === 'A' ? 'A (正确)' : (item.userAnswer === 'B' ? 'B (错误)' : item.userAnswer || '未作答');
+        correctAnsStr = item.correctAnswer === 'A' ? 'A (正确)' : (item.correctAnswer === 'B' ? 'B (错误)' : item.correctAnswer);
+      }
 
       card.innerHTML = `
         <div class="review-item-header">
@@ -521,8 +827,134 @@
     });
   }
 
+  // Render History Records Modal Content
+  function renderHistoryModal() {
+    const records = getExamRecords();
+    hTotalExams.textContent = `${records.length} 套`;
+
+    const passCount = records.filter(r => r.isPass).length;
+    hPassExams.textContent = `${passCount} 套`;
+
+    if (records.length > 0) {
+      const avg = (records.reduce((sum, r) => sum + parseFloat(r.totalScore), 0) / records.length).toFixed(1);
+      hAvgScore.textContent = `${avg} 分`;
+    } else {
+      hAvgScore.textContent = '0.0 分';
+    }
+
+    historyRecordsList.innerHTML = '';
+
+    if (records.length === 0) {
+      historyRecordsList.innerHTML = `
+        <div style="text-align: center; padding: 40px; color: var(--text-muted);">
+          <i class="fa-solid fa-clipboard" style="font-size: 3rem; margin-bottom: 12px; opacity: 0.5;"></i>
+          <p style="font-weight: 600;">暂无提交的模拟考试记录</p>
+          <p style="font-size: 0.85rem; margin-top: 4px;">完成试卷并点击【提交试卷】后，考试记录将自动生成并保存在此处。</p>
+        </div>
+      `;
+      return;
+    }
+
+    records.forEach((rec, i) => {
+      const item = document.createElement('div');
+      item.className = 'history-record-item';
+
+      const res = rec.res || {};
+      const min = Math.floor((rec.timeUsedSeconds || 0) / 60);
+      const sec = (rec.timeUsedSeconds || 0) % 60;
+      const wrongCount = res.wrongCount !== undefined ? res.wrongCount : (res.examWrongQuestions ? res.examWrongQuestions.length : 0);
+
+      item.innerHTML = `
+        <div class="h-item-main">
+          <div class="h-item-title">
+            <i class="fa-solid fa-file-circle-check"></i> ${rec.paperName || '模拟试卷'}
+            <span class="h-item-badge ${rec.isPass ? 'h-badge-pass' : 'h-badge-fail'}">
+              ${rec.isPass ? '合格' : '未合格'}
+            </span>
+          </div>
+          <div class="h-item-meta">
+            <span><i class="fa-regular fa-clock"></i> 提交时间: ${rec.submitTime}</span>
+            <span><i class="fa-solid fa-stopwatch"></i> 用时: ${min}分${sec}秒</span>
+            <span>单选: ${res.singleScore || 0}分 | 多选: ${res.multiScore || 0}分 | 判断: ${res.tfScore || 0}分</span>
+            <span style="color: var(--danger); font-weight: 700;"><i class="fa-solid fa-triangle-exclamation"></i> 错题+漏选: ${wrongCount} 题</span>
+          </div>
+        </div>
+
+        <div class="h-item-right">
+          <div class="h-item-score ${rec.isPass ? 'pass' : 'fail'}">${rec.totalScore}分</div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <button class="btn btn-sm btn-primary btn-inspect-rec" data-rec-index="${i}">
+              <i class="fa-solid fa-chart-pie"></i> 查看本卷分析
+            </button>
+            ${wrongCount > 0 ? `
+              <button class="btn btn-sm btn-danger btn-practice-wrong-rec" data-rec-index="${i}">
+                <i class="fa-solid fa-triangle-exclamation"></i> 练习本卷错题 (${wrongCount}题)
+              </button>
+            ` : ''}
+          </div>
+        </div>
+      `;
+
+      historyRecordsList.appendChild(item);
+    });
+
+    // Attach inspect & wrong question practice listeners
+    const inspectBtns = historyRecordsList.querySelectorAll('.btn-inspect-rec');
+    inspectBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.dataset.recIndex, 10);
+        const targetRec = records[idx];
+        if (targetRec && targetRec.res) {
+          currentExam.paperNumber = targetRec.paperNumber || 1;
+          currentExam.scoreResult = targetRec.res;
+          renderResultView(targetRec.res);
+          examView.classList.remove('active');
+          resultView.classList.add('active');
+          historyModal.classList.remove('active');
+        }
+      });
+    });
+
+    const practiceWrongBtns = historyRecordsList.querySelectorAll('.btn-practice-wrong-rec');
+    practiceWrongBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.dataset.recIndex, 10);
+        const targetRec = records[idx];
+        if (targetRec && targetRec.res) {
+          currentExam.paperNumber = targetRec.paperNumber || 1;
+          currentExam.scoreResult = targetRec.res;
+          renderResultView(targetRec.res);
+          examView.classList.remove('active');
+          resultView.classList.add('active');
+          historyModal.classList.remove('active');
+          
+          const wrongSection = document.getElementById('examWrongSection');
+          if (wrongSection) {
+            wrongSection.scrollIntoView({ behavior: 'smooth' });
+          }
+        }
+      });
+    });
+  }
+
   // Setup Event Listeners
   function setupEventListeners() {
+    // Paper Selector Change
+    if (paperSelect) {
+      paperSelect.addEventListener('change', (e) => {
+        const selectedPaper = parseInt(e.target.value, 10);
+        if (!currentExam.isSubmitted && Object.keys(currentExam.userAnswers).length > 0) {
+          if (confirm(`确定要切换到【模拟试卷 ${selectedPaper.toString().padStart(2, '0')}】吗？当前试卷的作答进度将被放弃。`)) {
+            startNewExam(selectedPaper);
+          } else {
+            paperSelect.value = currentExam.paperNumber || 1;
+          }
+        } else {
+          startNewExam(selectedPaper);
+        }
+      });
+    }
+
     // Navigation
     btnPrevQ.addEventListener('click', () => {
       if (currentIndex > 0) {
@@ -545,6 +977,18 @@
       renderCurrentQuestion();
     });
 
+    // Reset Exam Timer Button
+    if (btnResetTimer) {
+      btnResetTimer.addEventListener('click', () => {
+        if (confirm('确定要刷新并重置考试时间为 90:00 吗？')) {
+          currentExam.timeRemaining = TOTAL_EXAM_TIME;
+          saveState();
+          updateTimerDisplay();
+          startTimer();
+        }
+      });
+    }
+
     // Category Tabs
     tabBtns.forEach(btn => {
       btn.addEventListener('click', () => {
@@ -566,10 +1010,53 @@
       sheetModal.classList.remove('active');
     });
 
+    // History Records Modal
+    if (btnExamHistory) {
+      btnExamHistory.addEventListener('click', () => {
+        renderHistoryModal();
+        historyModal.classList.add('active');
+      });
+    }
+
+    if (btnOpenHistoryView) {
+      btnOpenHistoryView.addEventListener('click', () => {
+        renderHistoryModal();
+        historyModal.classList.add('active');
+      });
+    }
+
+    if (btnCloseHistory) {
+      btnCloseHistory.addEventListener('click', () => {
+        historyModal.classList.remove('active');
+      });
+    }
+
+    if (btnClearHistory) {
+      btnClearHistory.addEventListener('click', () => {
+        if (confirm('确定要清空所有历史考试记录与数据档案吗？此操作无法撤销。')) {
+          localStorage.removeItem(EXAM_RECORDS_KEY);
+          renderHistoryModal();
+          updateRecordCountBadge();
+        }
+      });
+    }
+
+    // Exam Wrong Questions Filter Buttons
+    examFilterBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        examFilterBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        examWrongFilter = btn.dataset.examFilter;
+        if (currentExam.scoreResult) {
+          renderExamWrongSection(currentExam.scoreResult.examWrongQuestions);
+        }
+      });
+    });
+
     // Submit Buttons
     btnSubmitExam.addEventListener('click', () => {
       const unanswered = 100 - Object.keys(currentExam.userAnswers).length;
-      let msg = '确定要提交试卷吗？';
+      let msg = '确定要提交试卷吗？交卷后将生成智能考试记录与数据分析。';
       if (unanswered > 0) {
         msg = `您还有 ${unanswered} 道题未回答，确定要现在提交试卷吗？`;
       }
@@ -579,29 +1066,21 @@
     });
 
     btnSubmitFromSheet.addEventListener('click', () => {
-      if (confirm('确定提交试卷并进行实时智能计算评分吗？')) {
+      if (confirm('确定提交试卷并进行智能计算评分与生成考试记录吗？')) {
         submitExam();
       }
     });
 
-    // Refresh / Restart Exam
-    btnRefreshExam.addEventListener('click', () => {
-      if (confirm('确定要重新抽取试卷吗？当前已作答的进度将被重置。')) {
-        startNewExam();
-        startTimer();
-        renderCurrentQuestion();
-        updateAnsweredCount();
-      }
-    });
-
+    // Restart Exam
     btnRestartExam.addEventListener('click', () => {
-      startNewExam();
+      const pNum = currentExam.paperNumber || 1;
+      startNewExam(pNum);
       startTimer();
       renderCurrentQuestion();
       updateAnsweredCount();
     });
 
-    // Filter Buttons in Review
+    // Filter Buttons in Full Review
     filterBtns.forEach(btn => {
       btn.addEventListener('click', () => {
         filterBtns.forEach(b => b.classList.remove('active'));
