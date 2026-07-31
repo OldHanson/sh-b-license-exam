@@ -1221,3 +1221,66 @@ body {
 .h-item-score.pass { color: var(--success); }
 .h-item-score.fail { color: var(--danger); }
 
+/* ==================== EXAM SYNC MODAL STYLES ==================== */
+.sync-block {
+  margin-bottom: 12px;
+}
+
+.sync-block h4 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin-bottom: 6px;
+  color: var(--text-main);
+}
+
+.sync-desc {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 14px;
+  line-height: 1.5;
+}
+
+.sync-input-group, .sync-input-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.sync-input, .form-input {
+  flex: 1;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  border: 1.5px solid var(--border-color);
+  font-size: 0.9rem;
+  outline: none;
+}
+
+.sync-input:focus, .form-input:focus {
+  border-color: var(--primary);
+}
+
+.sync-status {
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-top: 6px;
+}
+
+.sync-status.success { color: var(--success); }
+.sync-status.error { color: var(--danger); }
+
+.sync-divider {
+  border: 0;
+  height: 1px;
+  background-color: var(--border-color);
+  margin: 20px 0;
+}
+
+.sync-btn-row {
+  display: flex;
+  gap: 12px;
+}
+
+.sync-btn-row .btn {
+  flex: 1;
+}
+

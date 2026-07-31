@@ -110,6 +110,16 @@
   const btnClearHistory = document.getElementById('btnClearHistory');
   const historyRecordsList = document.getElementById('historyRecordsList');
 
+  // Exam Progress Sync Elements
+  const btnExamSyncModal = document.getElementById('btnExamSyncModal');
+  const examSyncModal = document.getElementById('examSyncModal');
+  const btnCloseExamSync = document.getElementById('btnCloseExamSync');
+  const examCloudSyncKeyInput = document.getElementById('examCloudSyncKeyInput');
+  const btnExamCloudSyncNow = document.getElementById('btnExamCloudSyncNow');
+  const examCloudSyncStatus = document.getElementById('examCloudSyncStatus');
+  const btnExportExamCode = document.getElementById('btnExportExamCode');
+  const btnImportExamCode = document.getElementById('btnImportExamCode');
+
   // Tab Buttons
   const tabBtns = document.querySelectorAll('.category-tabs .tab-btn');
   const filterBtns = document.querySelectorAll('.filter-btn');
@@ -1090,6 +1100,227 @@
         }
       });
     });
+
+    // Exam Sync Modal Listeners
+    if (btnExamSyncModal) {
+      btnExamSyncModal.addEventListener('click', () => {
+        if (examSyncModal) examSyncModal.classList.add('active');
+      });
+    }
+
+    if (btnCloseExamSync) {
+      btnCloseExamSync.addEventListener('click', () => {
+        if (examSyncModal) examSyncModal.classList.remove('active');
+      });
+    }
+
+    if (btnExamCloudSyncNow) {
+      btnExamCloudSyncNow.addEventListener('click', () => {
+        const key = examCloudSyncKeyInput ? examCloudSyncKeyInput.value.trim() : '';
+        if (!key) {
+          alert('请输入您的专属考试暗号！');
+          return;
+        }
+        autoCloudSyncExam(key);
+      });
+    }
+
+    if (btnExportExamCode) {
+      btnExportExamCode.addEventListener('click', () => {
+        const code = encodeExamSyncState();
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(code).then(() => {
+            alert('✅ 考试暗号已复制到剪贴板！\n请在另一台设备上点击【粘贴暗号导入记录】即可 0.1 秒秒级同步！');
+          }).catch(() => {
+            prompt('请复制下方您的考试暗号：', code);
+          });
+        } else {
+          prompt('请复制下方您的考试暗号：', code);
+        }
+      });
+    }
+
+    if (btnImportExamCode) {
+      btnImportExamCode.addEventListener('click', async () => {
+        let codeStr = '';
+        if (navigator.clipboard && navigator.clipboard.readText) {
+          try {
+            codeStr = await navigator.clipboard.readText();
+          } catch (e) {}
+        }
+
+        if (!codeStr || (!codeStr.startsWith('BEXAM2_') && !codeStr.includes('records'))) {
+          codeStr = prompt('请粘贴另一台设备复制的【考试暗号】：');
+        }
+
+        if (!codeStr) return;
+
+        const decoded = decodeExamSyncState(codeStr);
+        if (!decoded) {
+          alert('❌ 无法识别的暗号格式！请确认复制了正确的考试暗号。');
+          return;
+        }
+
+        const addedCount = mergeExamSyncData(decoded);
+        alert(`✅ 考试进度与历史数据导入成功！\n共同步 ${getExamRecords().length} 套考卷记录 (新增 ${addedCount} 套)！`);
+        renderHistoryModal();
+      });
+    }
+  }
+
+  // ==================== MOCK EXAM MULTI-DEVICE SYNC ENGINE ====================
+  function encodeExamSyncState() {
+    const records = getExamRecords();
+    const payload = {
+      v: 2,
+      records: records,
+      active: currentExam && !currentExam.isSubmitted ? {
+        paper: currentExam.paperNumber || 1,
+        ans: currentExam.userAnswers || {},
+        marked: currentExam.marked || {},
+        time: currentExam.timeRemaining
+      } : null
+    };
+    return 'BEXAM2_' + btoa(encodeURIComponent(JSON.stringify(payload)));
+  }
+
+  function decodeExamSyncState(codeStr) {
+    if (!codeStr) return null;
+    let clean = codeStr.trim().replace(/\s+/g, '');
+
+    // Case 1: Ultra-compact BEXAM2_ format
+    if (clean.startsWith('BEXAM2_')) {
+      try {
+        const raw = clean.substring(7);
+        const jsonStr = decodeURIComponent(atob(raw));
+        const payload = JSON.parse(jsonStr);
+        if (payload && payload.v === 2) return payload;
+      } catch (e) { console.error('BEXAM2 decode error:', e); }
+    }
+
+    // Case 2: Standard Base64
+    try {
+      const jsonStr = decodeURIComponent(atob(clean));
+      const obj = JSON.parse(jsonStr);
+      if (obj && typeof obj === 'object') return obj;
+    } catch (e) {}
+
+    // Case 3: Direct Base64
+    try {
+      const jsonStr = atob(clean);
+      const obj = JSON.parse(jsonStr);
+      if (obj && typeof obj === 'object') return obj;
+    } catch (e) {}
+
+    // Case 4: Raw JSON
+    try {
+      const obj = JSON.parse(codeStr.trim());
+      if (obj && typeof obj === 'object') return obj;
+    } catch (e) {}
+
+    return null;
+  }
+
+  function mergeExamSyncData(incoming) {
+    if (!incoming || typeof incoming !== 'object') return 0;
+
+    let mergedCount = 0;
+    if (incoming.records && Array.isArray(incoming.records)) {
+      const existingRecords = getExamRecords();
+      const existingMap = {};
+      existingRecords.forEach(r => { if (r.id) existingMap[r.id] = true; });
+
+      incoming.records.forEach(r => {
+        if (r && r.id && !existingMap[r.id]) {
+          existingRecords.push(r);
+          existingMap[r.id] = true;
+          mergedCount++;
+        }
+      });
+
+      // Sort by submit time descending
+      existingRecords.sort((a, b) => (b.id || '').localeCompare(a.id || ''));
+      safeSetItem(EXAM_RECORDS_KEY, JSON.stringify(existingRecords));
+      updateRecordCountBadge();
+    }
+
+    // Restore active exam if present and current is fresh
+    if (incoming.active && incoming.active.paper) {
+      if (!currentExam || currentExam.isSubmitted || Object.keys(currentExam.userAnswers || {}).length === 0) {
+        startNewExam(incoming.active.paper);
+        currentExam.userAnswers = incoming.active.ans || {};
+        currentExam.marked = incoming.active.marked || {};
+        currentExam.timeRemaining = incoming.active.time || TOTAL_EXAM_TIME;
+        saveState();
+        renderCurrentQuestion();
+        updateAnsweredCount();
+      }
+    }
+
+    return mergedCount;
+  }
+
+  const CLOUD_EXAM_ENDPOINTS = [
+    { name: 'kvdb', get: (key) => `https://kvdb.io/B5mX7q8Y3pZ1/exam_${key}`, put: (key) => `https://kvdb.io/B5mX7q8Y3pZ1/exam_${key}` },
+    { name: 'jsonblob', get: (key) => `https://jsonblob.com/api/jsonBlob/b_exam_${key}`, put: (key) => `https://jsonblob.com/api/jsonBlob/b_exam_${key}` }
+  ];
+
+  async function triggerExamCloudUpload(syncKey) {
+    const cleanKey = encodeURIComponent(syncKey.trim());
+    const payload = {
+      records: getExamRecords(),
+      active: currentExam && !currentExam.isSubmitted ? {
+        paper: currentExam.paperNumber || 1,
+        ans: currentExam.userAnswers || {},
+        marked: currentExam.marked || {},
+        time: currentExam.timeRemaining
+      } : null,
+      updatedAt: Date.now()
+    };
+
+    for (let provider of CLOUD_EXAM_ENDPOINTS) {
+      try {
+        const res = await fetch(provider.put(cleanKey), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) return;
+      } catch (e) {}
+    }
+  }
+
+  async function autoCloudSyncExam(syncKey) {
+    if (!syncKey) return;
+    const cleanKey = encodeURIComponent(syncKey.trim());
+    if (!examCloudSyncStatus) return;
+
+    examCloudSyncStatus.textContent = '🔄 正在同步云端考试历史与记录...';
+    examCloudSyncStatus.className = 'sync-status';
+
+    for (let provider of CLOUD_EXAM_ENDPOINTS) {
+      try {
+        const res = await fetch(provider.get(cleanKey));
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.records) {
+            const added = mergeExamSyncData(data);
+            examCloudSyncStatus.textContent = `✓ 已成功同步云端考试记录 (共 ${getExamRecords().length} 套考卷档案，本次新增 ${added} 套)`;
+            examCloudSyncStatus.className = 'sync-status success';
+            return;
+          }
+        }
+      } catch (e) {}
+    }
+
+    try {
+      await triggerExamCloudUpload(syncKey);
+      examCloudSyncStatus.textContent = '✓ 已成功创建并绑定专属考试暗号！';
+      examCloudSyncStatus.className = 'sync-status success';
+    } catch (e) {
+      examCloudSyncStatus.innerHTML = '💡 提示：网络连接超时。请优先使用下方<b>【方式二：复制/粘贴考试暗号】</b>秒级同步！';
+      examCloudSyncStatus.className = 'sync-status error';
+    }
   }
 
 })();

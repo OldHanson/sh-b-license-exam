@@ -775,33 +775,108 @@
 
   function encodeProgressState() {
     const isResetState = Object.keys(practiceState.answered).length === 0;
-    const data = {
-      answered: practiceState.answered,
-      positions: practiceState.categoryPositions,
-      isReset: isResetState
+    if (isResetState) {
+      return 'BPRAC_RESET';
+    }
+
+    // Convert answered into super-compact format: { 1: "C", 401: "AB" }
+    const compactAns = {};
+    if (practiceState.answered) {
+      Object.keys(practiceState.answered).forEach(qId => {
+        const item = practiceState.answered[qId];
+        if (item && item.ans !== undefined) {
+          compactAns[qId] = Array.isArray(item.ans) ? item.ans.join('') : String(item.ans);
+        }
+      });
+    }
+
+    const payload = {
+      v: 2,
+      p: [
+        practiceState.categoryPositions.single || 0,
+        practiceState.categoryPositions.multiple || 0,
+        practiceState.categoryPositions.tf || 0,
+        practiceState.categoryPositions.wrong || 0
+      ],
+      a: compactAns
     };
-    return btoa(encodeURIComponent(JSON.stringify(data)));
+
+    return 'BPRAC2_' + btoa(encodeURIComponent(JSON.stringify(payload)));
   }
 
   function decodeProgressState(codeStr) {
     if (!codeStr) return null;
     let clean = codeStr.trim().replace(/\s+/g, '');
 
-    // Attempt 1: Standard base64 with URI component
+    // Case 1: Ultra-compact BPRAC2_ format
+    if (clean.startsWith('BPRAC2_')) {
+      try {
+        const raw = clean.substring(7);
+        const jsonStr = decodeURIComponent(atob(raw));
+        const payload = JSON.parse(jsonStr);
+        if (payload && payload.v === 2) {
+          const rawBankMap = {};
+          (window.QUESTION_BANK || []).forEach(q => { rawBankMap[q.id] = q; });
+
+          const answeredObj = {};
+          if (payload.a) {
+            Object.keys(payload.a).forEach(qId => {
+              const val = payload.a[qId];
+              const q = rawBankMap[qId];
+              let isRight = false;
+              let ansVal = val;
+
+              if (q) {
+                if (q.category === 'multiple') {
+                  ansVal = val.split('').sort();
+                  const targetAnsStr = Array.isArray(q.answer) ? q.answer.join('') : String(q.answer);
+                  isRight = ansVal.join('') === targetAnsStr;
+                } else {
+                  isRight = val === q.answer;
+                }
+              }
+
+              answeredObj[qId] = {
+                ans: ansVal,
+                isRight: isRight,
+                timestamp: Date.now()
+              };
+            });
+          }
+
+          return {
+            answered: answeredObj,
+            positions: {
+              single: payload.p ? payload.p[0] : 0,
+              multiple: payload.p ? payload.p[1] : 0,
+              tf: payload.p ? payload.p[2] : 0,
+              wrong: payload.p ? payload.p[3] : 0
+            }
+          };
+        }
+      } catch (e) { console.error('BPRAC2 decode error:', e); }
+    }
+
+    // Case 2: RESET Command
+    if (clean === 'BPRAC_RESET') {
+      return { isReset: true, answered: {}, positions: { single: 0, multiple: 0, tf: 0, wrong: 0 } };
+    }
+
+    // Case 3: Standard legacy Base64 with URI component
     try {
       const jsonStr = decodeURIComponent(atob(clean));
       const obj = JSON.parse(jsonStr);
       if (obj && typeof obj === 'object') return obj;
     } catch (e) {}
 
-    // Attempt 2: Direct base64 without URI component
+    // Case 4: Direct base64 without URI component
     try {
       const jsonStr = atob(clean);
       const obj = JSON.parse(jsonStr);
       if (obj && typeof obj === 'object') return obj;
     } catch (e) {}
 
-    // Attempt 3: Raw JSON string
+    // Case 5: Raw JSON string
     try {
       const obj = JSON.parse(codeStr.trim());
       if (obj && typeof obj === 'object') return obj;

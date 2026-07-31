@@ -46,6 +46,11 @@
             <span class="badge-count" id="recordCountBadge">0</span>
           </button>
 
+          <!-- Exam Progress Sync Button -->
+          <button class="btn btn-secondary" id="btnExamSyncModal" title="同步跨设备考试进度与历史记录">
+            <i class="fa-solid fa-rotate"></i> 进度同步
+          </button>
+
           <!-- Answer Sheet Button -->
           <button class="btn btn-outline" id="btnToggleSheet" title="查看答题卡">
             <i class="fa-solid fa-border-all"></i> 答题卡
@@ -358,6 +363,46 @@
 
           <div class="history-records-list" id="historyRecordsList">
             <!-- Records rendered dynamically -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- EXAM PROGRESS SYNC MODAL -->
+    <div class="modal-overlay" id="examSyncModal">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3><i class="fa-solid fa-rotate"></i> 模拟考试跨设备进度同步</h3>
+          <button class="modal-close" id="btnCloseExamSync"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">
+          <!-- Option 1: Cloud Auto Sync -->
+          <div class="sync-block">
+            <h4><i class="fa-solid fa-cloud-arrow-up"></i> 方式一：专属暗号 极速云端自动同步</h4>
+            <p class="sync-desc">设置您的专属考试暗号（如手机号或自拟暗号），在其他设备输入相同暗号即可随时同步考试历史记录与作答数据！</p>
+            <div class="sync-input-row">
+              <input type="text" id="examCloudSyncKeyInput" placeholder="请输入您的专属暗号（如：13800138000）" class="form-input">
+              <button class="btn btn-primary" id="btnExamCloudSyncNow">
+                <i class="fa-solid fa-link"></i> 绑定并同步
+              </button>
+            </div>
+            <div class="sync-status" id="examCloudSyncStatus"></div>
+          </div>
+
+          <hr class="sync-divider">
+
+          <!-- Option 2: Export / Import via Compact Code -->
+          <div class="sync-block">
+            <h4><i class="fa-solid fa-key"></i> 方式二：精简暗号口令 手动迁移（离线备用）</h4>
+            <p class="sync-desc">在已有考试记录的设备上点击【复制考试暗号】，在另一台设备上点击【粘贴暗号导入】即可秒级同步！</p>
+            <div class="sync-btn-row">
+              <button class="btn btn-secondary" id="btnExportExamCode">
+                <i class="fa-solid fa-copy"></i> 复制考试暗号
+              </button>
+              <button class="btn btn-secondary" id="btnImportExamCode">
+                <i class="fa-solid fa-file-import"></i> 粘贴暗号导入记录
+              </button>
+            </div>
           </div>
         </div>
       </div>
