@@ -899,7 +899,9 @@
         }
 
         answeredObj[qId] = {
+          userAns: ansVal,
           ans: ansVal,
+          isCorrect: isRight,
           isRight: isRight,
           timestamp: Date.now()
         };
@@ -943,10 +945,16 @@
     if (incoming.answered) {
       Object.keys(incoming.answered).forEach(qId => {
         const item = incoming.answered[qId];
-        const existing = practiceState.answered[qId];
-        if (!existing || (item.timestamp && item.timestamp > (existing.timestamp || 0))) {
-          practiceState.answered[qId] = item;
-        }
+        const userAnsVal = item.userAns !== undefined ? item.userAns : item.ans;
+        const isCorrectVal = item.isCorrect !== undefined ? item.isCorrect : (item.isRight !== undefined ? item.isRight : false);
+
+        practiceState.answered[qId] = {
+          userAns: userAnsVal,
+          ans: userAnsVal,
+          isCorrect: isCorrectVal,
+          isRight: isCorrectVal,
+          timestamp: item.timestamp || Date.now()
+        };
       });
     }
 
