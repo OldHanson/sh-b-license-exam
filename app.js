@@ -1195,6 +1195,21 @@
     const btnShowExamQrCode = document.getElementById('btnShowExamQrCode');
     const examQrCodeContainer = document.getElementById('examQrCodeContainer');
     const examQrCodeImg = document.getElementById('examQrCodeImg');
+    const importExamCodeInput = document.getElementById('importExamCodeInput');
+    const btnConfirmExamImportPaste = document.getElementById('btnConfirmExamImportPaste');
+
+    async function tryAutoFillExamImportInput() {
+      if (!importExamCodeInput) return;
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        try {
+          const clipText = await navigator.clipboard.readText();
+          const extracted = extractSyncCodeFromAnyInput(clipText);
+          if (extracted && (extracted.startsWith('BEXAM') || extracted.includes('records'))) {
+            importExamCodeInput.value = clipText;
+          }
+        } catch (e) {}
+      }
+    }
 
     if (btnShareExamSyncLink) {
       btnShareExamSyncLink.addEventListener('click', () => {
@@ -1202,14 +1217,24 @@
         const baseUrl = window.location.protocol + '//' + window.location.host + window.location.pathname;
         const shareUrl = `${baseUrl}?sync=${encodeURIComponent(code)}`;
 
+        const exportBox = document.getElementById('exportExamResultBox');
+        const exportArea = document.getElementById('exportExamTextarea');
+        const exportTitle = document.getElementById('exportExamResultTitle');
+
+        if (exportArea && exportBox) {
+          exportArea.value = shareUrl;
+          exportBox.style.display = 'block';
+        }
+
         if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard.writeText(shareUrl).then(() => {
-            alert('✅ 考试一键同步超链接已复制到剪贴板！\n将链接发到微信/QQ，在另一台设备上点击链接即可一键自动同步考试记录！');
+            if (exportTitle) exportTitle.textContent = '✅ 考试一键同步超链接已复制到剪贴板！亦可点击下方框全选复制：';
+            alert('✅ 考试一键同步超链接已复制！\n将链接发到微信/QQ，在另一台设备上点击链接即可一键自动同步考试记录！');
           }).catch(() => {
-            prompt('请复制下方考试一键同步链接（发微信点开即同步）：', shareUrl);
+            if (exportTitle) exportTitle.textContent = '⚠️ 浏览器拦截了自动复制，请点击下方框【全选复制链接】：';
           });
         } else {
-          prompt('请复制下方考试一键同步链接（发微信点开即同步）：', shareUrl);
+          if (exportTitle) exportTitle.textContent = '⚠️ 请点击下方文本框【全选复制】一键链接：';
         }
       });
     }
@@ -1231,12 +1256,39 @@
     if (btnExamSyncModal) {
       btnExamSyncModal.addEventListener('click', () => {
         if (examSyncModal) examSyncModal.classList.add('active');
+        tryAutoFillExamImportInput();
       });
     }
 
     if (btnCloseExamSync) {
       btnCloseExamSync.addEventListener('click', () => {
         if (examSyncModal) examSyncModal.classList.remove('active');
+      });
+    }
+
+    if (importExamCodeInput) {
+      importExamCodeInput.addEventListener('focus', tryAutoFillExamImportInput);
+    }
+
+    if (btnConfirmExamImportPaste) {
+      btnConfirmExamImportPaste.addEventListener('click', () => {
+        const raw = importExamCodeInput ? importExamCodeInput.value : '';
+        const cleanCode = extractSyncCodeFromAnyInput(raw);
+        if (!cleanCode) {
+          alert('请先在输入框中粘贴您复制的考试暗号或一键链接！');
+          return;
+        }
+
+        const decoded = decodeExamSyncState(cleanCode);
+        if (!decoded) {
+          alert('❌ 无法识别的暗号/链接格式！请确认粘贴了完整的考试暗号或链接。');
+          return;
+        }
+
+        const addedCount = mergeExamSyncData(decoded);
+        alert(`🎉 考试进度与历史数据导入成功！\n共同步 ${getExamRecords().length} 套考卷记录 (新增 ${addedCount} 套)！`);
+        if (examSyncModal) examSyncModal.classList.remove('active');
+        renderHistoryModal();
       });
     }
 
@@ -1254,42 +1306,25 @@
     if (btnExportExamCode) {
       btnExportExamCode.addEventListener('click', () => {
         const code = encodeExamSyncState();
+        const exportBox = document.getElementById('exportExamResultBox');
+        const exportArea = document.getElementById('exportExamTextarea');
+        const exportTitle = document.getElementById('exportExamResultTitle');
+
+        if (exportArea && exportBox) {
+          exportArea.value = code;
+          exportBox.style.display = 'block';
+        }
+
         if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard.writeText(code).then(() => {
-            alert('✅ 考试暗号已复制到剪贴板！\n请在另一台设备上点击【粘贴暗号导入记录】即可 0.1 秒秒级同步！');
+            if (exportTitle) exportTitle.textContent = '✅ 考试暗号已自动复制到剪贴板！亦可点击下方框全选复制：';
+            alert('✅ 考试暗号已复制到剪贴板！\n如自动复制失败，弹窗下方已为您提供全选复制框。');
           }).catch(() => {
-            prompt('请复制下方您的考试暗号：', code);
+            if (exportTitle) exportTitle.textContent = '⚠️ 浏览器拦截了自动复制，请点击下方框【全选复制】：';
           });
         } else {
-          prompt('请复制下方您的考试暗号：', code);
+          if (exportTitle) exportTitle.textContent = '⚠️ 请点击下方文本框【全选复制】您的考试暗号：';
         }
-      });
-    }
-
-    if (btnImportExamCode) {
-      btnImportExamCode.addEventListener('click', async () => {
-        let codeStr = '';
-        if (navigator.clipboard && navigator.clipboard.readText) {
-          try {
-            codeStr = await navigator.clipboard.readText();
-          } catch (e) {}
-        }
-
-        if (!codeStr || (!codeStr.startsWith('BEXAM2_') && !codeStr.includes('records'))) {
-          codeStr = prompt('请粘贴另一台设备复制的【考试暗号】：');
-        }
-
-        if (!codeStr) return;
-
-        const decoded = decodeExamSyncState(codeStr);
-        if (!decoded) {
-          alert('❌ 无法识别的暗号格式！请确认复制了正确的考试暗号。');
-          return;
-        }
-
-        const addedCount = mergeExamSyncData(decoded);
-        alert(`✅ 考试进度与历史数据导入成功！\n共同步 ${getExamRecords().length} 套考卷记录 (新增 ${addedCount} 套)！`);
-        renderHistoryModal();
       });
     }
   }

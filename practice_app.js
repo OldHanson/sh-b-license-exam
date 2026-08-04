@@ -1151,11 +1151,106 @@
       }
     });
 
+  function extractSyncCodeFromAnyInput(rawInput) {
+    if (!rawInput) return '';
+    let s = String(rawInput).trim();
+
+    // 1. If user pasted a full URL containing ?sync= or #sync=
+    if (s.includes('sync=')) {
+      try {
+        const match = s.match(/sync=([^&%#\s]+)/);
+        if (match && match[1]) {
+          return decodeURIComponent(match[1]);
+        }
+      } catch (e) {}
+    }
+
+    // 2. Extract BPRAC / BEXAM code pattern from string
+    const matchCode = s.match(/(BPRAC\w*_[A-Za-z0-9%=\+\/_]+|BEXAM\w*_[A-Za-z0-9%=\+\/_]+)/);
+    if (matchCode && matchCode[1]) {
+      try {
+        return decodeURIComponent(matchCode[1]);
+      } catch (e) {
+        return matchCode[1];
+      }
+    }
+
+    return s;
+  }
+
+  function setupEventListeners() {
+    pJumpSelect.addEventListener('change', (e) => {
+      currentIndex = parseInt(e.target.value, 10);
+      renderCurrentQuestion();
+    });
+
+    btnPrevP.addEventListener('click', () => {
+      if (currentIndex > 0) {
+        currentIndex--;
+        renderCurrentQuestion();
+      }
+    });
+
+    btnNextP.addEventListener('click', () => {
+      if (currentIndex < currentList.length - 1) {
+        currentIndex++;
+        renderCurrentQuestion();
+      }
+    });
+
+    btnReAnswer.addEventListener('click', () => {
+      const q = currentList[currentIndex];
+      delete practiceState.answered[q.id];
+      delete wrongReviewAnswered[q.id];
+      saveState();
+      populateJumpSelect();
+      renderCurrentQuestion();
+    });
+
+    btnSubmitMulti.addEventListener('click', () => {
+      const q = currentList[currentIndex];
+      if (tempMultiSelected.length === 0) {
+        alert('请至少选择一个选项后再提交！');
+        return;
+      }
+      submitAnswer(q, tempMultiSelected);
+    });
+
+    btnResetProgress.addEventListener('click', () => {
+      if (confirm('确定要清空所有练习进度、错题集与作答记录吗？此操作无法撤销。')) {
+        practiceState.answered = {};
+        practiceState.categoryPositions = { single: 0, multiple: 0, tf: 0, wrong: 0 };
+        saveState();
+        switchCategory('single');
+        updateAllProgressDisplays();
+
+        if (confirm('已清空本设备进度！是否生成【重置暗号】以便去其他设备同步清空？')) {
+          const resetCode = encodeProgressState();
+          prompt('请复制重置暗号到其他设备导入：', resetCode);
+        }
+      }
+    });
+
     // Sync Modal Listeners
     const btnShareSyncLink = document.getElementById('btnShareSyncLink');
     const btnShowQrCode = document.getElementById('btnShowQrCode');
     const qrCodeContainer = document.getElementById('qrCodeContainer');
     const qrCodeImg = document.getElementById('qrCodeImg');
+    const importCodeInput = document.getElementById('importCodeInput');
+    const btnConfirmImportPaste = document.getElementById('btnConfirmImportPaste');
+
+    async function tryAutoFillImportInput() {
+      if (!importCodeInput) return;
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        try {
+          const clipText = await navigator.clipboard.readText();
+          const extracted = extractSyncCodeFromAnyInput(clipText);
+          if (extracted && (extracted.startsWith('BPRAC') || extracted.includes('"v":2'))) {
+            importCodeInput.value = clipText;
+          }
+        } catch (e) {}
+      }
+    }
 
     if (btnShareSyncLink) {
       btnShareSyncLink.addEventListener('click', () => {
@@ -1163,14 +1258,24 @@
         const baseUrl = window.location.protocol + '//' + window.location.host + window.location.pathname;
         const shareUrl = `${baseUrl}?sync=${encodeURIComponent(code)}`;
 
+        const exportBox = document.getElementById('exportResultBox');
+        const exportArea = document.getElementById('exportTextarea');
+        const exportTitle = document.getElementById('exportResultTitle');
+
+        if (exportArea && exportBox) {
+          exportArea.value = shareUrl;
+          exportBox.style.display = 'block';
+        }
+
         if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard.writeText(shareUrl).then(() => {
-            alert('✅ 一键同步超链接已复制到剪贴板！\n将链接发到微信/QQ，在手机上点击链接即可一键自动同步进度（零复制零粘贴）！');
+            if (exportTitle) exportTitle.textContent = '✅ 一键同步超链接已复制到剪贴板！亦可点击下方框全选复制：';
+            alert('✅ 一键同步超链接已复制！\n发到微信/QQ，在手机上点击链接即可一键自动同步进度（零复制零粘贴）！');
           }).catch(() => {
-            prompt('请复制下方一键同步链接（发微信点开即同步）：', shareUrl);
+            if (exportTitle) exportTitle.textContent = '⚠️ 浏览器拦截了自动复制，请点击下方框【全选复制链接】：';
           });
         } else {
-          prompt('请复制下方一键同步链接（发微信点开即同步）：', shareUrl);
+          if (exportTitle) exportTitle.textContent = '⚠️ 请点击下方文本框【全选复制】一键链接：';
         }
       });
     }
@@ -1191,11 +1296,35 @@
 
     btnSyncModal.addEventListener('click', () => {
       syncModal.classList.add('active');
+      tryAutoFillImportInput();
     });
 
     btnCloseSync.addEventListener('click', () => {
       syncModal.classList.remove('active');
     });
+
+    if (importCodeInput) {
+      importCodeInput.addEventListener('focus', tryAutoFillImportInput);
+    }
+
+    if (btnConfirmImportPaste) {
+      btnConfirmImportPaste.addEventListener('click', () => {
+        const raw = importCodeInput ? importCodeInput.value : '';
+        const cleanCode = extractSyncCodeFromAnyInput(raw);
+        if (!cleanCode) {
+          alert('请先在输入框中粘贴您复制的暗号口令或一键链接！');
+          return;
+        }
+
+        const decoded = decodeProgressState(cleanCode);
+        if (decoded && mergeProgressData(decoded)) {
+          alert('🎉 成功导入进度！所有做答与错题记录已全量更新。');
+          syncModal.classList.remove('active');
+        } else {
+          alert('❌ 暗号/链接格式无效，请确认复制了完整的暗号或链接后再试！');
+        }
+      });
+    }
 
     btnCloudSyncNow.addEventListener('click', () => {
       const key = cloudSyncKeyInput.value.trim();
@@ -1210,42 +1339,24 @@
 
     btnExportCode.addEventListener('click', () => {
       const code = encodeProgressState();
+      const exportBox = document.getElementById('exportResultBox');
+      const exportArea = document.getElementById('exportTextarea');
+      const exportTitle = document.getElementById('exportResultTitle');
+
+      if (exportArea && exportBox) {
+        exportArea.value = code;
+        exportBox.style.display = 'block';
+      }
+
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(code).then(() => {
-          alert('✅ 进度暗号已复制到剪贴板！\n请在另一台设备上点击【粘贴暗号导入进度】即可 0.1 秒秒级同步！');
+          if (exportTitle) exportTitle.textContent = '✅ 进度暗号已复制到剪贴板！亦可点击下方框全选复制：';
+          alert('✅ 进度暗号已复制到剪贴板！\n如自动复制失败，弹窗下方已为您提供全选复制框。');
         }).catch(() => {
-          prompt('请复制下方您的进度暗号：', code);
+          if (exportTitle) exportTitle.textContent = '⚠️ 浏览器拦截了自动复制，请点击下方框【全选复制】：';
         });
       } else {
-        prompt('请复制下方您的进度暗号：', code);
-      }
-    });
-
-    btnImportCode.addEventListener('click', async () => {
-      let inputCode = '';
-      if (navigator.clipboard && navigator.clipboard.readText) {
-        try {
-          inputCode = await navigator.clipboard.readText();
-        } catch (e) {}
-      }
-
-      if (!inputCode || inputCode.length < 5) {
-        inputCode = prompt('请粘贴您在其他设备上复制的进度暗号：');
-      } else {
-        const confirmPaste = confirm(`系统已自动检测到剪贴板中暗号，是否直接使用导入？\n\n暗号预览：${inputCode.substring(0, 35)}...`);
-        if (!confirmPaste) {
-          inputCode = prompt('请手动粘贴您在其他设备上复制的进度暗号：');
-        }
-      }
-
-      if (inputCode) {
-        const decoded = decodeProgressState(inputCode);
-        if (decoded && mergeProgressData(decoded)) {
-          alert('🎉 成功同步进度！所有做答与错题记录已全量更新。');
-          syncModal.classList.remove('active');
-        } else if (!decoded) {
-          alert('❌ 暗号格式无效，请重新复制后再试！');
-        }
+        if (exportTitle) exportTitle.textContent = '⚠️ 请点击下方文本框【全选复制】您的暗号：';
       }
     });
   }

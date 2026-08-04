@@ -1332,3 +1332,29 @@ body {
   flex: 1;
 }
 
+.sync-textarea {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  border: 1.5px solid var(--border-color);
+  font-size: 0.88rem;
+  font-family: inherit;
+  outline: none;
+  resize: vertical;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease;
+  background-color: #ffffff;
+}
+
+.sync-textarea:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.sync-export-result {
+  background-color: #f8fafc;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  border: 1.5px dashed var(--primary);
+}
+

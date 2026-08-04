@@ -411,17 +411,27 @@
 
           <hr class="sync-divider">
 
-          <!-- Option 2: Export / Import via Compact Code -->
+          <!-- Option 2: Export / Import via Compact Code (Dual Protection) -->
           <div class="sync-block">
-            <h4><i class="fa-solid fa-key"></i> 方式三：精简暗号口令 手动迁移（备用）</h4>
-            <p class="sync-desc">在已有考试记录的设备上点击【复制考试暗号】，在另一台设备上点击【粘贴暗号导入】即可秒级同步！</p>
-            <div class="sync-btn-row">
-              <button class="btn btn-secondary" id="btnExportExamCode">
-                <i class="fa-solid fa-copy"></i> 复制考试暗号
-              </button>
-              <button class="btn btn-secondary" id="btnImportExamCode">
-                <i class="fa-solid fa-file-import"></i> 粘贴暗号导入记录
-              </button>
+            <h4><i class="fa-solid fa-paste"></i> 方式三：直接粘贴暗号/链接 导入记录（双保险备用）</h4>
+            <p class="sync-desc">您可以直接在下方输入框中粘贴您复制的考试暗号或一键链接（支持 ⌘V / Ctrl+V / 长按粘贴），点击【确认导入】即可！</p>
+            
+            <div class="sync-paste-box">
+              <textarea id="importExamCodeInput" class="sync-textarea" rows="2" placeholder="在此直接粘贴您复制的考试暗号或一键链接..."></textarea>
+              <div class="sync-btn-row" style="margin-top: 10px;">
+                <button class="btn btn-primary" id="btnConfirmExamImportPaste">
+                  <i class="fa-solid fa-file-import"></i> 确认导入并合并考试记录
+                </button>
+                <button class="btn btn-secondary" id="btnExportExamCode">
+                  <i class="fa-solid fa-copy"></i> 生成考试暗号
+                </button>
+              </div>
+            </div>
+
+            <!-- Export Display Box -->
+            <div id="exportExamResultBox" class="sync-export-result" style="display:none; margin-top: 12px;">
+              <p style="font-size:0.82rem; font-weight:600; color:var(--success); margin-bottom:6px;" id="exportExamResultTitle">✅ 考试暗号已生成！若未自动复制，请点击下方文本框【全选复制】：</p>
+              <textarea id="exportExamTextarea" class="sync-textarea" rows="2" readonly onclick="this.select();"></textarea>
             </div>
           </div>
         </div>
