@@ -238,12 +238,32 @@
           <button class="modal-close" id="btnCloseSync"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div class="modal-body">
+          <!-- Option 0: One-Click Link & QR Code Sync -->
+          <div class="sync-block">
+            <h4><i class="fa-solid fa-qrcode"></i> 方式一：一键超链接 / 微信扫码即同步（零复制 · 最便捷 ⭐⭐⭐⭐⭐）</h4>
+            <p class="sync-desc">无需复制粘贴！一键生成同步链接或二维码，发到微信/QQ点开链接或手机扫码，0.1 秒自动完成全量进度同步！</p>
+            <div class="sync-btn-row">
+              <button class="btn btn-primary" id="btnShareSyncLink">
+                <i class="fa-solid fa-link"></i> 复制一键同步链接 (发微信)
+              </button>
+              <button class="btn btn-secondary" id="btnShowQrCode">
+                <i class="fa-solid fa-qrcode"></i> 手机扫码一键同步
+              </button>
+            </div>
+            <div id="qrCodeContainer" class="qr-container" style="display:none; margin-top: 12px; text-align: center;">
+              <img id="qrCodeImg" src="" alt="同步二维码" style="width:150px; height:150px; border-radius: 8px; border: 1px solid var(--border-color); padding: 6px; background: white;">
+              <p style="font-size:0.8rem; color:var(--text-muted); margin-top:6px;">使用手机微信或相机扫码，直接打开页面即可自动同步！</p>
+            </div>
+          </div>
+
+          <hr class="sync-divider">
+
           <!-- Option 1: Cloud Sync Code -->
           <div class="sync-block">
-            <h4><i class="fa-solid fa-cloud"></i> 方式一：云端暗号实时自动同步（推荐 ⭐⭐⭐⭐⭐）</h4>
-            <p class="sync-desc">在 iPhone、iPad 与 Mac 上设置相同的【专属同步暗号】，即可多设备自动同步刷题进度与作答记录。</p>
+            <h4><i class="fa-solid fa-cloud"></i> 方式二：专属云端暗号 实时自动同步</h4>
+            <p class="sync-desc">在 iPhone、iPad 与 Mac 上设置相同的【专属同步暗号】，多设备即可自动同步刷题进度。</p>
             <div class="sync-input-group">
-              <input type="text" id="cloudSyncKey" class="sync-input" placeholder="设置您的专属暗号 (例如: hz913)">
+              <input type="text" id="cloudSyncKey" class="sync-input" placeholder="设置您的专属暗号 (例如: 13800138000)">
               <button class="btn btn-primary" id="btnCloudSyncNow">
                 <i class="fa-solid fa-rotate"></i> 绑定并同步
               </button>
@@ -255,7 +275,7 @@
 
           <!-- Option 2: Export / Import via Text Code -->
           <div class="sync-block">
-            <h4><i class="fa-solid fa-key"></i> 方式二：暗号口令 手动迁移（离线备用）</h4>
+            <h4><i class="fa-solid fa-key"></i> 方式三：暗号口令 手动迁移（备用）</h4>
             <p class="sync-desc">在已刷题的设备上点击【复制暗号】，在另一台设备上点击【粘贴暗号导入】即可完成进度迁移。</p>
             <div class="sync-btn-row">
               <button class="btn btn-secondary" id="btnExportCode">
@@ -273,7 +293,7 @@
   </div>
 
   <!-- Load Question Bank JS & Practice App JS -->
-  <script src="questions_bank.js?v=20260731_v3"></script>
-  <script src="practice_app.js?v=20260731_v3"></script>
+  <script src="questions_bank.js?v=20260804_v2"></script>
+  <script src="practice_app.js?v=20260804_v2"></script>
 </body>
 </html>

@@ -106,10 +106,32 @@
     ensureBankReady(init);
   }
 
+  function checkUrlSyncParam() {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      let syncCode = urlParams.get('sync');
+      if (!syncCode && window.location.hash && window.location.hash.includes('sync=')) {
+        syncCode = window.location.hash.split('sync=')[1];
+      }
+
+      if (syncCode) {
+        const decoded = decodeProgressState(syncCode);
+        if (decoded && mergeProgressData(decoded)) {
+          alert('🎉 欢迎使用一键链接/二维码同步！\n已成功自动载入并更新您的全量刷题进度！');
+          try {
+            const newUrl = window.location.protocol + '//' + window.location.host + window.location.pathname;
+            window.history.replaceState({ path: newUrl }, '', newUrl);
+          } catch (e) {}
+        }
+      }
+    } catch (e) {}
+  }
+
   function init() {
     loadBankData();
     loadState();
     setupEventListeners();
+    checkUrlSyncParam();
     switchCategory(practiceState.currentCategory || 'single');
     updateAllProgressDisplays();
 
@@ -1130,6 +1152,43 @@
     });
 
     // Sync Modal Listeners
+    const btnShareSyncLink = document.getElementById('btnShareSyncLink');
+    const btnShowQrCode = document.getElementById('btnShowQrCode');
+    const qrCodeContainer = document.getElementById('qrCodeContainer');
+    const qrCodeImg = document.getElementById('qrCodeImg');
+
+    if (btnShareSyncLink) {
+      btnShareSyncLink.addEventListener('click', () => {
+        const code = encodeProgressState();
+        const baseUrl = window.location.protocol + '//' + window.location.host + window.location.pathname;
+        const shareUrl = `${baseUrl}?sync=${encodeURIComponent(code)}`;
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(shareUrl).then(() => {
+            alert('✅ 一键同步超链接已复制到剪贴板！\n将链接发到微信/QQ，在手机上点击链接即可一键自动同步进度（零复制零粘贴）！');
+          }).catch(() => {
+            prompt('请复制下方一键同步链接（发微信点开即同步）：', shareUrl);
+          });
+        } else {
+          prompt('请复制下方一键同步链接（发微信点开即同步）：', shareUrl);
+        }
+      });
+    }
+
+    if (btnShowQrCode) {
+      btnShowQrCode.addEventListener('click', () => {
+        const code = encodeProgressState();
+        const baseUrl = window.location.protocol + '//' + window.location.host + window.location.pathname;
+        const shareUrl = `${baseUrl}?sync=${encodeURIComponent(code)}`;
+        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(shareUrl)}`;
+
+        if (qrCodeImg && qrCodeContainer) {
+          qrCodeImg.src = qrUrl;
+          qrCodeContainer.style.display = qrCodeContainer.style.display === 'none' ? 'block' : 'none';
+        }
+      });
+    }
+
     btnSyncModal.addEventListener('click', () => {
       syncModal.classList.add('active');
     });

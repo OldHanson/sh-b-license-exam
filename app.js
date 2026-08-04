@@ -183,9 +183,33 @@
     ensureBankReady(init);
   }
 
+  function checkUrlExamSyncParam() {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      let syncCode = urlParams.get('sync');
+      if (!syncCode && window.location.hash && window.location.hash.includes('sync=')) {
+        syncCode = window.location.hash.split('sync=')[1];
+      }
+
+      if (syncCode) {
+        const decoded = decodeExamSyncState(syncCode);
+        if (decoded) {
+          const added = mergeExamSyncData(decoded);
+          alert(`🎉 欢迎使用一键链接/二维码同步！\n已成功自动载入并合并您的模拟考试记录（新增 ${added} 套考卷）！`);
+          try {
+            const newUrl = window.location.protocol + '//' + window.location.host + window.location.pathname;
+            window.history.replaceState({ path: newUrl }, '', newUrl);
+          } catch (e) {}
+          renderHistoryModal();
+        }
+      }
+    } catch (e) {}
+  }
+
   function init() {
     updateRecordCountBadge();
     setupEventListeners();
+    checkUrlExamSyncParam();
 
     let loadedState = false;
     const savedState = safeGetItem(EXAM_STATE_KEY);
@@ -732,6 +756,65 @@
     renderReviewList('all', res.details);
   }
 
+  // Helper to render full options text list (A, B, C, D) with user selection & correct tags
+  function renderReviewOptionsHtml(q, userAns) {
+    let opts = [];
+    if (q.category === 'tf' || q.typeName === '判断题') {
+      opts = ['正确', '错误'];
+    } else {
+      opts = Array.isArray(q.options) ? q.options : [];
+    }
+
+    const labels = ['A', 'B', 'C', 'D', 'E'];
+    const userAnsArr = Array.isArray(userAns) ? userAns : (userAns ? [userAns] : []);
+    const correctAnsArr = Array.isArray(q.answer) ? q.answer : (q.answer ? [q.answer] : []);
+
+    let html = '<div class="review-opts">';
+    opts.forEach((optText, i) => {
+      const key = labels[i] || String.fromCharCode(65 + i);
+
+      // Check if user selected this key
+      let isUserChosen = false;
+      if (q.category === 'tf' || q.typeName === '判断题') {
+        isUserChosen = (key === 'A' && userAns === '正确') || (key === 'B' && userAns === '错误') || (userAns === key);
+      } else {
+        isUserChosen = userAnsArr.includes(key);
+      }
+
+      // Check if this key is the correct answer
+      let isCorrectKey = false;
+      if (q.category === 'tf' || q.typeName === '判断题') {
+        isCorrectKey = (key === 'A' && q.answer === '正确') || (key === 'B' && q.answer === '错误') || (q.answer === key);
+      } else {
+        isCorrectKey = correctAnsArr.includes(key);
+      }
+
+      let lineClass = 'review-opt-line';
+      let tagHtml = '';
+
+      if (isCorrectKey && isUserChosen) {
+        lineClass += ' is-correct-user';
+        tagHtml = '<span class="review-tag tag-correct-user"><i class="fa-solid fa-circle-check"></i> 您的选择 (正确)</span>';
+      } else if (isCorrectKey) {
+        lineClass += ' is-correct';
+        tagHtml = '<span class="review-tag tag-correct"><i class="fa-solid fa-check"></i> 正确答案</span>';
+      } else if (isUserChosen) {
+        lineClass += ' is-user-wrong';
+        tagHtml = '<span class="review-tag tag-user-wrong"><i class="fa-solid fa-circle-xmark"></i> 您的选择 (错误)</span>';
+      }
+
+      html += `
+        <div class="${lineClass}">
+          <span class="opt-label">${key}.</span>
+          <span class="opt-content">${optText}</span>
+          ${tagHtml}
+        </div>
+      `;
+    });
+    html += '</div>';
+    return html;
+  }
+
   function renderExamWrongSection(wrongQuestions) {
     if (!examWrongReviewList) return;
     examWrongReviewList.innerHTML = '';
@@ -779,12 +862,15 @@
         correctAnsStr = q.answer === 'A' ? 'A (正确)' : (q.answer === 'B' ? 'B (错误)' : q.answer);
       }
 
+      const optionsHtml = renderReviewOptionsHtml(q, item.userAns);
+
       card.innerHTML = `
         <div class="review-item-header">
           <span style="font-weight: 700;">第 ${item.index + 1} 题 (${q.typeName})</span>
           ${statusBadge}
         </div>
         <div class="review-prompt">${q.prompt}</div>
+        ${optionsHtml}
         <div class="review-ans-row">
           <div>您的选择：<strong style="color: #ef4444;">${userAnsStr}</strong></div>
           <div>正确答案：<strong style="color: #10b981;">${correctAnsStr}</strong></div>
@@ -821,12 +907,15 @@
         correctAnsStr = item.correctAnswer === 'A' ? 'A (正确)' : (item.correctAnswer === 'B' ? 'B (错误)' : item.correctAnswer);
       }
 
+      const optionsHtml = renderReviewOptionsHtml(item.question, item.userAnswer);
+
       card.innerHTML = `
         <div class="review-item-header">
           <span style="font-weight: 700;">第 ${item.index + 1} 题 (${item.question.typeName})</span>
           ${statusBadge}
         </div>
         <div class="review-prompt">${item.question.prompt}</div>
+        ${optionsHtml}
         <div class="review-ans-row">
           <div>您的选择：<strong style="color: ${item.status === 'correct' ? '#10b981' : '#ef4444'};">${userAnsStr}</strong></div>
           <div>正确答案：<strong style="color: #10b981;">${correctAnsStr}</strong></div>
@@ -1102,6 +1191,43 @@
     });
 
     // Exam Sync Modal Listeners
+    const btnShareExamSyncLink = document.getElementById('btnShareExamSyncLink');
+    const btnShowExamQrCode = document.getElementById('btnShowExamQrCode');
+    const examQrCodeContainer = document.getElementById('examQrCodeContainer');
+    const examQrCodeImg = document.getElementById('examQrCodeImg');
+
+    if (btnShareExamSyncLink) {
+      btnShareExamSyncLink.addEventListener('click', () => {
+        const code = encodeExamSyncState();
+        const baseUrl = window.location.protocol + '//' + window.location.host + window.location.pathname;
+        const shareUrl = `${baseUrl}?sync=${encodeURIComponent(code)}`;
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(shareUrl).then(() => {
+            alert('✅ 考试一键同步超链接已复制到剪贴板！\n将链接发到微信/QQ，在另一台设备上点击链接即可一键自动同步考试记录！');
+          }).catch(() => {
+            prompt('请复制下方考试一键同步链接（发微信点开即同步）：', shareUrl);
+          });
+        } else {
+          prompt('请复制下方考试一键同步链接（发微信点开即同步）：', shareUrl);
+        }
+      });
+    }
+
+    if (btnShowExamQrCode) {
+      btnShowExamQrCode.addEventListener('click', () => {
+        const code = encodeExamSyncState();
+        const baseUrl = window.location.protocol + '//' + window.location.host + window.location.pathname;
+        const shareUrl = `${baseUrl}?sync=${encodeURIComponent(code)}`;
+        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(shareUrl)}`;
+
+        if (examQrCodeImg && examQrCodeContainer) {
+          examQrCodeImg.src = qrUrl;
+          examQrCodeContainer.style.display = examQrCodeContainer.style.display === 'none' ? 'block' : 'none';
+        }
+      });
+    }
+
     if (btnExamSyncModal) {
       btnExamSyncModal.addEventListener('click', () => {
         if (examSyncModal) examSyncModal.classList.add('active');
