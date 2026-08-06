@@ -30,50 +30,9 @@
   let currentList = [];
   let currentIndex = 0; // Index in currentList
 
-  // DOM Elements
-  const totalProgressText = document.getElementById('totalProgressText');
-  const totalAccuracyText = document.getElementById('totalAccuracyText');
-  const btnResetProgress = document.getElementById('btnResetProgress');
-
-  // Category Tabs & Progress Elements
-  const catTabs = document.querySelectorAll('.cat-tab-btn');
-  const singleFill = document.getElementById('singleFill');
-  const singleMeta = document.getElementById('singleMeta');
-  const multiFill = document.getElementById('multiFill');
-  const multiMeta = document.getElementById('multiMeta');
-  const tfFill = document.getElementById('tfFill');
-  const tfMeta = document.getElementById('tfMeta');
-
-  // Question Card Elements
-  const catTag = document.getElementById('catTag');
-  const indexTag = document.getElementById('indexTag');
-  const globalIndexTag = document.getElementById('globalIndexTag');
-  const jumpSelect = document.getElementById('jumpSelect');
-  const pTitle = document.getElementById('pTitle');
-  const pOptionsContainer = document.getElementById('pOptionsContainer');
-  const multiSubmitWrapper = document.getElementById('multiSubmitWrapper');
-  const btnSubmitMulti = document.getElementById('btnSubmitMulti');
-
-  // Feedback Banner Elements
-  const feedbackBanner = document.getElementById('feedbackBanner');
-  const feedbackStatusRow = document.getElementById('feedbackStatusRow');
-  const userAnsVal = document.getElementById('userAnsVal');
-  const correctAnsVal = document.getElementById('correctAnsVal');
-
-  // Footer Buttons
-  const btnPrevP = document.getElementById('btnPrevP');
-  const btnNextP = document.getElementById('btnNextP');
-  const btnReAnswer = document.getElementById('btnReAnswer');
-
-  // Sync Modal Elements
-  const syncModal = document.getElementById('syncModal');
-  const btnSyncModal = document.getElementById('btnSyncModal');
-  const btnCloseSync = document.getElementById('btnCloseSync');
-  const cloudSyncKeyInput = document.getElementById('cloudSyncKey');
-  const btnCloudSyncNow = document.getElementById('btnCloudSyncNow');
-  const cloudSyncStatus = document.getElementById('cloudSyncStatus');
-  const btnExportCode = document.getElementById('btnExportCode');
-  const btnImportCode = document.getElementById('btnImportCode');
+  function getEl(id) {
+    return document.getElementById(id);
+  }
 
   // Multi-choice temporary selected options & wrong review session state
   let tempMultiSelected = [];
@@ -99,11 +58,21 @@
     }, 100);
   }
 
+  function safeInit() {
+    try {
+      init();
+    } catch (e) {
+      console.error('Initialization error:', e);
+      loadBankData();
+      switchCategory('single');
+    }
+  }
+
   // Initialize
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => ensureBankReady(init));
+    document.addEventListener('DOMContentLoaded', () => ensureBankReady(safeInit));
   } else {
-    ensureBankReady(init);
+    ensureBankReady(safeInit);
   }
 
   function checkUrlSyncParam() {
@@ -130,13 +99,14 @@
   function init() {
     loadBankData();
     loadState();
-    setupEventListeners();
-    checkUrlSyncParam();
     switchCategory(practiceState.currentCategory || 'single');
     updateAllProgressDisplays();
+    setupEventListeners();
+    checkUrlSyncParam();
 
     if (practiceState.cloudSyncKey) {
-      cloudSyncKeyInput.value = practiceState.cloudSyncKey;
+      const keyInput = getEl('cloudSyncKey');
+      if (keyInput) keyInput.value = practiceState.cloudSyncKey;
       autoCloudSync();
     }
   }
@@ -148,8 +118,33 @@
     bankTF = rawBank.filter(q => q.category === 'tf');
   }
 
+  function safeGetItem(key) {
+    try {
+      return localStorage.getItem(key);
+    } catch (e) {
+      console.warn('localStorage getItem blocked:', e);
+      return null;
+    }
+  }
+
+  function safeSetItem(key, value) {
+    try {
+      localStorage.setItem(key, value);
+    } catch (e) {
+      console.warn('localStorage setItem blocked:', e);
+    }
+  }
+
+  function safeRemoveItem(key) {
+    try {
+      localStorage.removeItem(key);
+    } catch (e) {
+      console.warn('localStorage removeItem blocked:', e);
+    }
+  }
+
   function loadState() {
-    const saved = localStorage.getItem(STORAGE_KEY);
+    const saved = safeGetItem(STORAGE_KEY);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -169,7 +164,7 @@
   }
 
   function saveState() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(practiceState));
+    safeSetItem(STORAGE_KEY, JSON.stringify(practiceState));
   }
 
   function isQuestionInWrongSet(q, rec) {
@@ -221,24 +216,26 @@
 
   function switchCategory(category) {
     practiceState.currentCategory = category;
-    const wrongFilterBar = document.getElementById('wrongFilterBar');
+    const wrongFilterBar = getEl('wrongFilterBar');
+    const catTag = getEl('catTag');
+    const catTabs = document.querySelectorAll('.cat-tab-btn');
 
     if (category === 'single') {
       currentList = bankSingle;
-      catTag.textContent = '单选题';
+      if (catTag) catTag.textContent = '单选题';
       if (wrongFilterBar) wrongFilterBar.style.display = 'none';
     } else if (category === 'multiple') {
       currentList = bankMultiple;
-      catTag.textContent = '多选题';
+      if (catTag) catTag.textContent = '多选题';
       if (wrongFilterBar) wrongFilterBar.style.display = 'none';
     } else if (category === 'tf') {
       currentList = bankTF;
-      catTag.textContent = '判断题';
+      if (catTag) catTag.textContent = '判断题';
       if (wrongFilterBar) wrongFilterBar.style.display = 'none';
     } else if (category === 'wrong') {
       wrongReviewAnswered = {}; // Clear previous session answers so questions present clean for new practice
       currentList = getWrongQuestionsList();
-      catTag.textContent = '错题集练习';
+      if (catTag) catTag.textContent = '错题集练习';
       if (wrongFilterBar) wrongFilterBar.style.display = 'flex';
 
       const wrongFilterBtns = document.querySelectorAll('.wrong-filter-btn');
@@ -270,6 +267,8 @@
   }
 
   function populateJumpSelect() {
+    const jumpSelect = getEl('jumpSelect');
+    if (!jumpSelect) return;
     jumpSelect.innerHTML = '';
 
     if (!currentList || currentList.length === 0) {
@@ -359,27 +358,42 @@
   }
 
   function renderCurrentQuestion() {
-    if (practiceState.currentCategory === 'wrong' && (!currentList || currentList.length === 0)) {
-      indexTag.textContent = '第 0 / 0 题';
-      globalIndexTag.textContent = '全库 0 错题';
-      catTag.textContent = '错题集练习';
-      const wrongCountTag = document.getElementById('wrongCountTag');
-      if (wrongCountTag) wrongCountTag.style.display = 'none';
-      const wrongModeTag = document.getElementById('wrongModeTag');
-      if (wrongModeTag) wrongModeTag.style.display = 'none';
+    const indexTag = getEl('indexTag');
+    const globalIndexTag = getEl('globalIndexTag');
+    const catTag = getEl('catTag');
+    const wrongCountTag = getEl('wrongCountTag');
+    const wrongModeTag = getEl('wrongModeTag');
+    const pTitle = getEl('pTitle');
+    const pOptionsContainer = getEl('pOptionsContainer');
+    const feedbackBanner = getEl('feedbackBanner');
+    const multiSubmitWrapper = getEl('multiSubmitWrapper');
+    const btnPrevPEl = getEl('btnPrevP');
+    const btnNextPEl = getEl('btnNextP');
+    const jumpSelect = getEl('jumpSelect');
+    const btnToggleWrong = getEl('btnToggleWrong');
 
-      pTitle.innerHTML = `
-        <div style="text-align: center; padding: 40px 20px;">
-          <i class="fa-solid fa-circle-check" style="font-size: 3.5rem; color: var(--success); margin-bottom: 16px;"></i>
-          <h3 style="font-size: 1.25rem; font-weight: 700; color: var(--text-main);">🎉 太棒了！您当前没有错题</h3>
-          <p style="font-size: 0.9rem; color: var(--text-muted); margin-top: 8px;">包含单选、多选（含漏选题）与判断题在内的所有已练题目均回答正确！</p>
-        </div>
-      `;
-      pOptionsContainer.innerHTML = '';
-      feedbackBanner.style.display = 'none';
-      multiSubmitWrapper.style.display = 'none';
-      btnPrevP.disabled = true;
-      btnNextP.disabled = true;
+    if (practiceState.currentCategory === 'wrong' && (!currentList || currentList.length === 0)) {
+      if (indexTag) indexTag.textContent = '第 0 / 0 题';
+      if (globalIndexTag) globalIndexTag.textContent = '全库 0 错题';
+      if (catTag) catTag.textContent = '错题集练习';
+      if (wrongCountTag) wrongCountTag.style.display = 'none';
+      if (wrongModeTag) wrongModeTag.style.display = 'none';
+      if (btnToggleWrong) btnToggleWrong.style.display = 'none';
+
+      if (pTitle) {
+        pTitle.innerHTML = `
+          <div style="text-align: center; padding: 40px 20px;">
+            <i class="fa-solid fa-circle-check" style="font-size: 3.5rem; color: var(--success); margin-bottom: 16px;"></i>
+            <h3 style="font-size: 1.25rem; font-weight: 700; color: var(--text-main);">🎉 太棒了！您当前没有错题</h3>
+            <p style="font-size: 0.9rem; color: var(--text-muted); margin-top: 8px;">包含单选、多选（含漏选题）与判断题在内的所有已练题目均回答正确！</p>
+          </div>
+        `;
+      }
+      if (pOptionsContainer) pOptionsContainer.innerHTML = '';
+      if (feedbackBanner) feedbackBanner.style.display = 'none';
+      if (multiSubmitWrapper) multiSubmitWrapper.style.display = 'none';
+      if (btnPrevPEl) btnPrevPEl.disabled = true;
+      if (btnNextPEl) btnNextPEl.disabled = true;
       updateAllProgressDisplays();
       return;
     }
@@ -390,25 +404,24 @@
     practiceState.categoryPositions[practiceState.currentCategory] = currentIndex;
     saveState();
 
-    indexTag.textContent = `第 ${currentIndex + 1} / ${currentList.length} 题`;
-    globalIndexTag.textContent = `全库第 ${q.id} 题`;
+    if (indexTag) indexTag.textContent = `第 ${currentIndex + 1} / ${currentList.length} 题`;
+    if (globalIndexTag) globalIndexTag.textContent = `全库第 ${q.id} 题`;
 
     if (practiceState.currentCategory === 'wrong') {
       const typeLabel = q.category === 'single' ? '错题·单选' : (q.category === 'multiple' ? '错题·多选' : '错题·判断');
-      catTag.textContent = typeLabel;
+      if (catTag) catTag.textContent = typeLabel;
     }
 
-    jumpSelect.value = currentIndex;
+    if (jumpSelect) jumpSelect.value = currentIndex;
 
-    pTitle.textContent = `${currentIndex + 1}. ${q.prompt}`;
-    pOptionsContainer.innerHTML = '';
-    feedbackBanner.style.display = 'none';
-    multiSubmitWrapper.style.display = 'none';
+    if (pTitle) pTitle.textContent = `${currentIndex + 1}. ${q.prompt}`;
+    if (pOptionsContainer) pOptionsContainer.innerHTML = '';
+    if (feedbackBanner) feedbackBanner.style.display = 'none';
+    if (multiSubmitWrapper) multiSubmitWrapper.style.display = 'none';
 
     const record = practiceState.answered[q.id];
     const isWrongCategory = practiceState.currentCategory === 'wrong';
 
-    // In wrong category review mode, present options clean (unanswered) until user submits an answer in this review session
     let recordForRender = record;
     if (isWrongCategory && !wrongReviewAnswered[q.id]) {
       recordForRender = null;
@@ -417,8 +430,6 @@
     const isAnswered = !!recordForRender;
 
     // Update Wrong Count Tag & Wrong Mode Tag
-    const wrongCountTag = document.getElementById('wrongCountTag');
-    const wrongModeTag = document.getElementById('wrongModeTag');
     const wrongCount = getQuestionWrongCount(q, record);
     
     if (wrongCountTag) {
@@ -438,6 +449,19 @@
       }
     }
 
+    // Update Toggle Wrong Collection Button State
+    const inWrongSet = isQuestionInWrongSet(q, record);
+    if (btnToggleWrong) {
+      btnToggleWrong.style.display = 'inline-flex';
+      if (inWrongSet) {
+        btnToggleWrong.className = 'btn-toggle-wrong in-wrong-set';
+        btnToggleWrong.innerHTML = '<i class="fa-solid fa-bookmark"></i> 已在错题集 (点击移出)';
+      } else {
+        btnToggleWrong.className = 'btn-toggle-wrong';
+        btnToggleWrong.innerHTML = '<i class="fa-regular fa-bookmark"></i> 移入错题集';
+      }
+    }
+
     if (q.category === 'tf') {
       renderTFOptions(q, recordForRender);
     } else if (q.category === 'single') {
@@ -450,8 +474,8 @@
       showFeedbackBanner(q, record);
     }
 
-    btnPrevP.disabled = currentIndex === 0;
-    btnNextP.disabled = currentIndex === currentList.length - 1;
+    if (btnPrevPEl) btnPrevPEl.disabled = currentIndex === 0;
+    if (btnNextPEl) btnNextPEl.disabled = currentIndex === currentList.length - 1;
 
     updateAllProgressDisplays();
   }
@@ -459,6 +483,8 @@
   function renderTFOptions(q, record) {
     const opts = ['正确', '错误'];
     const keys = ['A', 'B'];
+    const pOptionsContainer = getEl('pOptionsContainer');
+    if (!pOptionsContainer) return;
 
     opts.forEach((optText, i) => {
       const key = keys[i];
@@ -482,9 +508,7 @@
         <div class="option-text">${optText}</div>
       `;
 
-      if (!record) {
-        optEl.addEventListener('click', () => submitAnswer(q, key));
-      }
+      optEl.addEventListener('click', () => submitAnswer(q, key));
 
       pOptionsContainer.appendChild(optEl);
     });
@@ -492,6 +516,8 @@
 
   function renderSingleOptions(q, record) {
     const labels = ['A', 'B', 'C', 'D', 'E'];
+    const pOptionsContainer = getEl('pOptionsContainer');
+    if (!pOptionsContainer) return;
 
     q.options.forEach((optText, i) => {
       const key = labels[i] || String.fromCharCode(65 + i);
@@ -512,9 +538,7 @@
         <div class="option-text">${optText}</div>
       `;
 
-      if (!record) {
-        optEl.addEventListener('click', () => submitAnswer(q, key));
-      }
+      optEl.addEventListener('click', () => submitAnswer(q, key));
 
       pOptionsContainer.appendChild(optEl);
     });
@@ -522,8 +546,14 @@
 
   function renderMultipleOptions(q, record) {
     const labels = ['A', 'B', 'C', 'D', 'E'];
-    if (!record) {
+    const pOptionsContainer = getEl('pOptionsContainer');
+    const multiSubmitWrapper = getEl('multiSubmitWrapper');
+    if (!pOptionsContainer) return;
+
+    if (!record && multiSubmitWrapper) {
       tempMultiSelected = [];
+      multiSubmitWrapper.style.display = 'flex';
+    } else if (multiSubmitWrapper) {
       multiSubmitWrapper.style.display = 'flex';
     }
 
@@ -546,18 +576,16 @@
         <div class="option-text">${optText}</div>
       `;
 
-      if (!record) {
-        optEl.addEventListener('click', () => {
-          if (tempMultiSelected.includes(key)) {
-            tempMultiSelected = tempMultiSelected.filter(k => k !== key);
-            optEl.classList.remove('selected');
-          } else {
-            tempMultiSelected.push(key);
-            tempMultiSelected.sort();
-            optEl.classList.add('selected');
-          }
-        });
-      }
+      optEl.addEventListener('click', () => {
+        if (tempMultiSelected.includes(key)) {
+          tempMultiSelected = tempMultiSelected.filter(k => k !== key);
+          optEl.classList.remove('selected');
+        } else {
+          tempMultiSelected.push(key);
+          tempMultiSelected.sort();
+          optEl.classList.add('selected');
+        }
+      });
 
       pOptionsContainer.appendChild(optEl);
     });
@@ -596,7 +624,6 @@
 
     const isAttemptWrong = (status !== 'correct');
     const newWrongCount = isAttemptWrong ? prevWrongCount + 1 : prevWrongCount;
-    // If user gets it 100% correct, inWrongSet becomes false (automatically removed from wrong set!)
     const inWrongSet = isAttemptWrong;
 
     practiceState.answered[q.id] = {
@@ -622,12 +649,15 @@
   }
 
   function showFeedbackBanner(q, record) {
+    const feedbackBanner = getEl('feedbackBanner');
+    const feedbackStatusRow = getEl('feedbackStatusRow');
+
     if (!record) {
-      feedbackBanner.style.display = 'none';
+      if (feedbackBanner) feedbackBanner.style.display = 'none';
       return;
     }
 
-    feedbackBanner.style.display = 'block';
+    if (feedbackBanner) feedbackBanner.style.display = 'block';
 
     let userAnsStr = Array.isArray(record.userAns) ? record.userAns.join(', ') : (record.userAns || '未作答');
     let correctAnsStr = Array.isArray(q.answer) ? q.answer.join(', ') : q.answer;
@@ -639,46 +669,59 @@
 
     const wrongCount = getQuestionWrongCount(q, record);
 
-    if (q.category === 'multiple') {
-      const status = getMultiChoiceResultStatus(q, record);
-      if (status === 'correct') {
-        feedbackBanner.className = 'feedback-banner correct';
-        if (wrongCount > 0) {
-          feedbackStatusRow.innerHTML = '<i class="fa-solid fa-circle-check"></i> 恭喜您，回答正确！（已从错题集中自动移除 🎉）';
+    if (feedbackStatusRow) {
+      if (q.category === 'multiple') {
+        const status = getMultiChoiceResultStatus(q, record);
+        if (status === 'correct') {
+          if (feedbackBanner) feedbackBanner.className = 'feedback-banner correct';
+          if (wrongCount > 0) {
+            feedbackStatusRow.innerHTML = '<i class="fa-solid fa-circle-check"></i> 恭喜您，回答正确！（已从错题集中自动移除 🎉）';
+          } else {
+            feedbackStatusRow.innerHTML = '<i class="fa-solid fa-circle-check"></i> 恭喜您，回答正确！（所有选项均选对）';
+          }
+        } else if (status === 'missed') {
+          if (feedbackBanner) feedbackBanner.className = 'feedback-banner missed';
+          feedbackStatusRow.innerHTML = `<i class="fa-solid fa-circle-minus"></i> 漏选（选对了部分选项，未选错项 · 累计错 ${wrongCount} 次，保留在错题集中）`;
         } else {
-          feedbackStatusRow.innerHTML = '<i class="fa-solid fa-circle-check"></i> 恭喜您，回答正确！（所有选项均选对）';
-        }
-      } else if (status === 'missed') {
-        feedbackBanner.className = 'feedback-banner missed';
-        feedbackStatusRow.innerHTML = `<i class="fa-solid fa-circle-minus"></i> 漏选（选对了部分选项，未选错项 · 累计错 ${wrongCount} 次，保留在错题集中）`;
-      } else {
-        feedbackBanner.className = 'feedback-banner wrong';
-        feedbackStatusRow.innerHTML = `<i class="fa-solid fa-circle-xmark"></i> 回答错误（选到了错误的选项 · 累计错 ${wrongCount} 次，保留在错题集中）`;
-      }
-    } else {
-      if (record.isCorrect) {
-        feedbackBanner.className = 'feedback-banner correct';
-        if (wrongCount > 0) {
-          feedbackStatusRow.innerHTML = '<i class="fa-solid fa-circle-check"></i> 恭喜您，回答正确！（已从错题集中自动移除 🎉）';
-        } else {
-          feedbackStatusRow.innerHTML = '<i class="fa-solid fa-circle-check"></i> 恭喜您，回答正确！';
+          if (feedbackBanner) feedbackBanner.className = 'feedback-banner wrong';
+          feedbackStatusRow.innerHTML = `<i class="fa-solid fa-circle-xmark"></i> 回答错误（选到了错误的选项 · 累计错 ${wrongCount} 次，保留在错题集中）`;
         }
       } else {
-        feedbackBanner.className = 'feedback-banner wrong';
-        feedbackStatusRow.innerHTML = `<i class="fa-solid fa-circle-xmark"></i> 回答错误（已累计错 ${wrongCount} 次，保留在错题集中）`;
+        if (record.isCorrect) {
+          if (feedbackBanner) feedbackBanner.className = 'feedback-banner correct';
+          if (wrongCount > 0) {
+            feedbackStatusRow.innerHTML = '<i class="fa-solid fa-circle-check"></i> 恭喜您，回答正确！（已从错题集中自动移除 🎉）';
+          } else {
+            feedbackStatusRow.innerHTML = '<i class="fa-solid fa-circle-check"></i> 恭喜您，回答正确！';
+          }
+        } else {
+          if (feedbackBanner) feedbackBanner.className = 'feedback-banner wrong';
+          feedbackStatusRow.innerHTML = `<i class="fa-solid fa-circle-xmark"></i> 回答错误（已累计错 ${wrongCount} 次，保留在错题集中）`;
+        }
       }
     }
 
-    userAnsVal.textContent = userAnsStr;
-    correctAnsVal.textContent = correctAnsStr;
+    const userAnsValEl = getEl('userAnsVal');
+    const correctAnsValEl = getEl('correctAnsVal');
+    if (userAnsValEl) userAnsValEl.textContent = userAnsStr;
+    if (correctAnsValEl) correctAnsValEl.textContent = correctAnsStr;
   }
 
   function updateAllProgressDisplays() {
+    const singleFillEl = getEl('singleFill');
+    const singleMetaEl = getEl('singleMeta');
+    const multiFillEl = getEl('multiFill');
+    const multiMetaEl = getEl('multiMeta');
+    const tfFillEl = getEl('tfFill');
+    const tfMetaEl = getEl('tfMeta');
+    const totalProgressTextEl = getEl('totalProgressText');
+    const totalAccuracyTextEl = getEl('totalAccuracyText');
+
     // Single Choice Tab Stats
     const singleAnsCount = bankSingle.filter(q => practiceState.answered[q.id]).length;
     const singlePct = ((singleAnsCount / 400) * 100).toFixed(1);
-    singleFill.style.width = `${singlePct}%`;
-    singleMeta.textContent = `已练 ${singleAnsCount} / 400 (${singlePct}%)`;
+    if (singleFillEl) singleFillEl.style.width = `${singlePct}%`;
+    if (singleMetaEl) singleMetaEl.textContent = `已练 ${singleAnsCount} / 400 (${singlePct}%)`;
 
     let singleCorrectCount = 0;
     let singleWrongCount = 0;
@@ -691,16 +734,16 @@
     });
     const singleCorrectPct = singleAnsCount > 0 ? ((singleCorrectCount / singleAnsCount) * 100).toFixed(1) : '0.0';
     const singleWrongPct = singleAnsCount > 0 ? ((singleWrongCount / singleAnsCount) * 100).toFixed(1) : '0.0';
-    const singleCorrectEl = document.getElementById('singleCorrectText');
-    const singleWrongEl = document.getElementById('singleWrongText');
+    const singleCorrectEl = getEl('singleCorrectText');
+    const singleWrongEl = getEl('singleWrongText');
     if (singleCorrectEl) singleCorrectEl.textContent = `${singleCorrectCount} (${singleCorrectPct}%)`;
     if (singleWrongEl) singleWrongEl.textContent = `${singleWrongCount} (${singleWrongPct}%)`;
 
     // Multiple Choice Tab Stats (正确, 漏选, 错误)
     const multiAnsCount = bankMultiple.filter(q => practiceState.answered[q.id]).length;
     const multiPct = ((multiAnsCount / 200) * 100).toFixed(1);
-    multiFill.style.width = `${multiPct}%`;
-    multiMeta.textContent = `已练 ${multiAnsCount} / 200 (${multiPct}%)`;
+    if (multiFillEl) multiFillEl.style.width = `${multiPct}%`;
+    if (multiMetaEl) multiMetaEl.textContent = `已练 ${multiAnsCount} / 200 (${multiPct}%)`;
 
     let multiCorrectCount = 0;
     let multiMissedCount = 0;
@@ -720,9 +763,9 @@
     const multiMissedPct = multiAnsCount > 0 ? ((multiMissedCount / multiAnsCount) * 100).toFixed(1) : '0.0';
     const multiWrongPct = multiAnsCount > 0 ? ((multiWrongCount / multiAnsCount) * 100).toFixed(1) : '0.0';
 
-    const multiCorrectEl = document.getElementById('multiCorrectText');
-    const multiMissedEl = document.getElementById('multiMissedText');
-    const multiWrongEl = document.getElementById('multiWrongText');
+    const multiCorrectEl = getEl('multiCorrectText');
+    const multiMissedEl = getEl('multiMissedText');
+    const multiWrongEl = getEl('multiWrongText');
     if (multiCorrectEl) multiCorrectEl.textContent = `${multiCorrectCount} (${multiCorrectPct}%)`;
     if (multiMissedEl) multiMissedEl.textContent = `${multiMissedCount} (${multiMissedPct}%)`;
     if (multiWrongEl) multiWrongEl.textContent = `${multiWrongCount} (${multiWrongPct}%)`;
@@ -730,8 +773,8 @@
     // TF Choice Tab Stats
     const tfAnsCount = bankTF.filter(q => practiceState.answered[q.id]).length;
     const tfPct = ((tfAnsCount / 400) * 100).toFixed(1);
-    tfFill.style.width = `${tfPct}%`;
-    tfMeta.textContent = `已练 ${tfAnsCount} / 400 (${tfPct}%)`;
+    if (tfFillEl) tfFillEl.style.width = `${tfPct}%`;
+    if (tfMetaEl) tfMetaEl.textContent = `已练 ${tfAnsCount} / 400 (${tfPct}%)`;
 
     let tfCorrectCount = 0;
     let tfWrongCount = 0;
@@ -744,8 +787,8 @@
     });
     const tfCorrectPct = tfAnsCount > 0 ? ((tfCorrectCount / tfAnsCount) * 100).toFixed(1) : '0.0';
     const tfWrongPct = tfAnsCount > 0 ? ((tfWrongCount / tfAnsCount) * 100).toFixed(1) : '0.0';
-    const tfCorrectEl = document.getElementById('tfCorrectText');
-    const tfWrongEl = document.getElementById('tfWrongText');
+    const tfCorrectEl = getEl('tfCorrectText');
+    const tfWrongEl = getEl('tfWrongText');
     if (tfCorrectEl) tfCorrectEl.textContent = `${tfCorrectCount} (${tfCorrectPct}%)`;
     if (tfWrongEl) tfWrongEl.textContent = `${tfWrongCount} (${tfWrongPct}%)`;
 
@@ -759,10 +802,10 @@
     const totalAnsCount = Object.keys(practiceState.answered).length;
     const wrongPct = totalAnsCount > 0 ? ((wrongCount / totalAnsCount) * 100).toFixed(1) : '0.0';
 
-    const wrongTotalCountEl = document.getElementById('wrongTotalCount');
-    const wrongMetaPctEl = document.getElementById('wrongMetaPct');
-    const wrongBadgeTextEl = document.getElementById('wrongBadgeText');
-    const wrongFillEl = document.getElementById('wrongFill');
+    const wrongTotalCountEl = getEl('wrongTotalCount');
+    const wrongMetaPctEl = getEl('wrongMetaPct');
+    const wrongBadgeTextEl = getEl('wrongBadgeText');
+    const wrongFillEl = getEl('wrongFill');
 
     if (wrongTotalCountEl) wrongTotalCountEl.textContent = wrongCount;
     if (wrongMetaPctEl) wrongMetaPctEl.textContent = `${wrongPct}%`;
@@ -770,10 +813,10 @@
     if (wrongFillEl) wrongFillEl.style.width = `${Math.min(wrongPct, 100)}%`;
 
     // Filter button count badges
-    const wrongCountAllEl = document.getElementById('wrongCountAll');
-    const wrongCountSingleEl = document.getElementById('wrongCountSingle');
-    const wrongCountMultipleEl = document.getElementById('wrongCountMultiple');
-    const wrongCountTFEl = document.getElementById('wrongCountTF');
+    const wrongCountAllEl = getEl('wrongCountAll');
+    const wrongCountSingleEl = getEl('wrongCountSingle');
+    const wrongCountMultipleEl = getEl('wrongCountMultiple');
+    const wrongCountTFEl = getEl('wrongCountTF');
 
     if (wrongCountAllEl) wrongCountAllEl.textContent = allWrongList.length;
     if (wrongCountSingleEl) wrongCountSingleEl.textContent = singleWrongList.length;
@@ -782,7 +825,7 @@
 
     // Overall Progress & Accuracy
     const totalPct = ((totalAnsCount / 1000) * 100).toFixed(1);
-    totalProgressText.textContent = `${totalAnsCount} / 1000 (${totalPct}%)`;
+    if (totalProgressTextEl) totalProgressTextEl.textContent = `${totalAnsCount} / 1000 (${totalPct}%)`;
 
     let correctTotal = 0;
     Object.values(practiceState.answered).forEach(rec => {
@@ -790,7 +833,7 @@
     });
 
     const accuracyPct = totalAnsCount > 0 ? ((correctTotal / totalAnsCount) * 100).toFixed(1) : '0';
-    totalAccuracyText.textContent = `${accuracyPct}%`;
+    if (totalAccuracyTextEl) totalAccuracyTextEl.textContent = `${accuracyPct}%`;
   }
 
   // ==================== MULTI-DEVICE SYNC ENGINE ====================
@@ -1065,6 +1108,7 @@
 
   // Event Listeners Setup
   function setupEventListeners() {
+    const catTabs = document.querySelectorAll('.cat-tab-btn');
     catTabs.forEach(tab => {
       tab.addEventListener('click', () => {
         switchCategory(tab.dataset.cat);
@@ -1095,149 +1139,134 @@
       });
     });
 
-    jumpSelect.addEventListener('change', (e) => {
-      currentIndex = parseInt(e.target.value, 10);
-      renderCurrentQuestion();
-    });
+    const btnToggleWrong = getEl('btnToggleWrong');
+    if (btnToggleWrong) {
+      btnToggleWrong.addEventListener('click', () => {
+        if (!currentList || currentList.length === 0) return;
+        const q = currentList[currentIndex];
+        if (!q) return;
 
-    btnPrevP.addEventListener('click', () => {
-      if (currentIndex > 0) {
-        currentIndex--;
-        renderCurrentQuestion();
-      }
-    });
+        let rec = practiceState.answered[q.id];
+        const currentlyInWrong = isQuestionInWrongSet(q, rec);
 
-    btnNextP.addEventListener('click', () => {
-      if (currentIndex < currentList.length - 1) {
-        currentIndex++;
-        renderCurrentQuestion();
-      }
-    });
-
-    btnReAnswer.addEventListener('click', () => {
-      const q = currentList[currentIndex];
-      delete practiceState.answered[q.id];
-      delete wrongReviewAnswered[q.id];
-      saveState();
-      populateJumpSelect();
-      renderCurrentQuestion();
-    });
-
-    btnSubmitMulti.addEventListener('click', () => {
-      const q = currentList[currentIndex];
-      if (tempMultiSelected.length === 0) {
-        alert('请至少选择一个选项后再提交！');
-        return;
-      }
-      submitAnswer(q, tempMultiSelected);
-    });
-
-    btnResetProgress.addEventListener('click', () => {
-      if (confirm('确定要清空所有练习进度、错题集与作答记录吗？此操作无法撤销。')) {
-        practiceState.answered = {};
-        practiceState.categoryPositions = { single: 0, multiple: 0, tf: 0, wrong: 0 };
-        saveState();
-        switchCategory('single');
-        updateAllProgressDisplays();
-
-        // Prompt to export reset code to reset other devices too
-        if (confirm('已清空本设备进度！是否复制【重置暗号】到剪贴板，以便去其他设备同步清空？')) {
-          const resetCode = encodeProgressState();
-          if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(resetCode);
-            alert('✅ 重置暗号已复制！去其他设备点击【粘贴暗号导入进度】即可同步清空该设备。');
+        if (currentlyInWrong) {
+          if (!rec) {
+            rec = { userAns: null, isCorrect: true, inWrongSet: false, wrongCount: 0, timestamp: Date.now() };
+            practiceState.answered[q.id] = rec;
+          } else {
+            rec.inWrongSet = false;
           }
-        }
-      }
-    });
+          saveState();
 
-  function extractSyncCodeFromAnyInput(rawInput) {
-    if (!rawInput) return '';
-    let s = String(rawInput).trim();
-
-    // 1. If user pasted a full URL containing ?sync= or #sync=
-    if (s.includes('sync=')) {
-      try {
-        const match = s.match(/sync=([^&%#\s]+)/);
-        if (match && match[1]) {
-          return decodeURIComponent(match[1]);
+          if (practiceState.currentCategory === 'wrong') {
+            currentList = getWrongQuestionsList();
+            if (currentIndex >= currentList.length) currentIndex = currentList.length - 1;
+            if (currentIndex < 0) currentIndex = 0;
+            populateJumpSelect();
+            renderCurrentQuestion();
+          } else {
+            renderCurrentQuestion();
+          }
+          updateAllProgressDisplays();
+        } else {
+          if (!rec) {
+            rec = { userAns: null, isCorrect: false, inWrongSet: true, wrongCount: 1, timestamp: Date.now() };
+            practiceState.answered[q.id] = rec;
+          } else {
+            rec.inWrongSet = true;
+            if (typeof rec.wrongCount !== 'number' || rec.wrongCount < 1) {
+              rec.wrongCount = 1;
+            }
+            rec.timestamp = Date.now();
+          }
+          saveState();
+          renderCurrentQuestion();
+          updateAllProgressDisplays();
         }
-      } catch (e) {}
+      });
     }
 
-    // 2. Extract BPRAC / BEXAM code pattern from string
-    const matchCode = s.match(/(BPRAC\w*_[A-Za-z0-9%=\+\/_]+|BEXAM\w*_[A-Za-z0-9%=\+\/_]+)/);
-    if (matchCode && matchCode[1]) {
-      try {
-        return decodeURIComponent(matchCode[1]);
-      } catch (e) {
-        return matchCode[1];
-      }
+    const jumpSelect = getEl('jumpSelect');
+    if (jumpSelect) {
+      jumpSelect.addEventListener('change', (e) => {
+        currentIndex = parseInt(e.target.value, 10);
+        renderCurrentQuestion();
+      });
     }
 
-    return s;
-  }
-
-  function setupEventListeners() {
-    pJumpSelect.addEventListener('change', (e) => {
-      currentIndex = parseInt(e.target.value, 10);
-      renderCurrentQuestion();
-    });
-
-    btnPrevP.addEventListener('click', () => {
-      if (currentIndex > 0) {
-        currentIndex--;
-        renderCurrentQuestion();
-      }
-    });
-
-    btnNextP.addEventListener('click', () => {
-      if (currentIndex < currentList.length - 1) {
-        currentIndex++;
-        renderCurrentQuestion();
-      }
-    });
-
-    btnReAnswer.addEventListener('click', () => {
-      const q = currentList[currentIndex];
-      delete practiceState.answered[q.id];
-      delete wrongReviewAnswered[q.id];
-      saveState();
-      populateJumpSelect();
-      renderCurrentQuestion();
-    });
-
-    btnSubmitMulti.addEventListener('click', () => {
-      const q = currentList[currentIndex];
-      if (tempMultiSelected.length === 0) {
-        alert('请至少选择一个选项后再提交！');
-        return;
-      }
-      submitAnswer(q, tempMultiSelected);
-    });
-
-    btnResetProgress.addEventListener('click', () => {
-      if (confirm('确定要清空所有练习进度、错题集与作答记录吗？此操作无法撤销。')) {
-        practiceState.answered = {};
-        practiceState.categoryPositions = { single: 0, multiple: 0, tf: 0, wrong: 0 };
-        saveState();
-        switchCategory('single');
-        updateAllProgressDisplays();
-
-        if (confirm('已清空本设备进度！是否生成【重置暗号】以便去其他设备同步清空？')) {
-          const resetCode = encodeProgressState();
-          prompt('请复制重置暗号到其他设备导入：', resetCode);
+    const btnPrevP = getEl('btnPrevP');
+    if (btnPrevP) {
+      btnPrevP.addEventListener('click', () => {
+        if (currentIndex > 0) {
+          currentIndex--;
+          renderCurrentQuestion();
         }
-      }
-    });
+      });
+    }
+
+    const btnNextP = getEl('btnNextP');
+    if (btnNextP) {
+      btnNextP.addEventListener('click', () => {
+        if (currentIndex < currentList.length - 1) {
+          currentIndex++;
+          renderCurrentQuestion();
+        }
+      });
+    }
+
+    const btnReAnswer = getEl('btnReAnswer');
+    if (btnReAnswer) {
+      btnReAnswer.addEventListener('click', () => {
+        const q = currentList[currentIndex];
+        if (q) {
+          delete practiceState.answered[q.id];
+          delete wrongReviewAnswered[q.id];
+          saveState();
+          populateJumpSelect();
+          renderCurrentQuestion();
+        }
+      });
+    }
+
+    const btnSubmitMulti = getEl('btnSubmitMulti');
+    if (btnSubmitMulti) {
+      btnSubmitMulti.addEventListener('click', () => {
+        const q = currentList[currentIndex];
+        if (!q) return;
+        if (tempMultiSelected.length === 0) {
+          alert('请至少选择一个选项后再提交！');
+          return;
+        }
+        submitAnswer(q, tempMultiSelected);
+      });
+    }
+
+    const btnResetProgress = getEl('btnResetProgress');
+    if (btnResetProgress) {
+      btnResetProgress.addEventListener('click', () => {
+        if (confirm('确定要清空所有练习进度、错题集与作答记录吗？此操作无法撤销。')) {
+          practiceState.answered = {};
+          practiceState.categoryPositions = { single: 0, multiple: 0, tf: 0, wrong: 0 };
+          saveState();
+          switchCategory('single');
+          updateAllProgressDisplays();
+        }
+      });
+    }
 
     // Sync Modal Listeners
-    const btnShareSyncLink = document.getElementById('btnShareSyncLink');
-    const btnShowQrCode = document.getElementById('btnShowQrCode');
-    const qrCodeContainer = document.getElementById('qrCodeContainer');
-    const qrCodeImg = document.getElementById('qrCodeImg');
-    const importCodeInput = document.getElementById('importCodeInput');
-    const btnConfirmImportPaste = document.getElementById('btnConfirmImportPaste');
+    const btnSyncModal = getEl('btnSyncModal');
+    const btnCloseSync = getEl('btnCloseSync');
+    const syncModal = getEl('syncModal');
+    const btnShareSyncLink = getEl('btnShareSyncLink');
+    const btnShowQrCode = getEl('btnShowQrCode');
+    const qrCodeContainer = getEl('qrCodeContainer');
+    const qrCodeImg = getEl('qrCodeImg');
+    const importCodeInput = getEl('importCodeInput');
+    const btnConfirmImportPaste = getEl('btnConfirmImportPaste');
+    const btnCloudSyncNow = getEl('btnCloudSyncNow');
+    const btnExportCode = getEl('btnExportCode');
+    const cloudSyncKeyInput = getEl('cloudSyncKey');
 
     async function tryAutoFillImportInput() {
       if (!importCodeInput) return;
@@ -1258,9 +1287,9 @@
         const baseUrl = window.location.protocol + '//' + window.location.host + window.location.pathname;
         const shareUrl = `${baseUrl}?sync=${encodeURIComponent(code)}`;
 
-        const exportBox = document.getElementById('exportResultBox');
-        const exportArea = document.getElementById('exportTextarea');
-        const exportTitle = document.getElementById('exportResultTitle');
+        const exportBox = getEl('exportResultBox');
+        const exportArea = getEl('exportTextarea');
+        const exportTitle = getEl('exportResultTitle');
 
         if (exportArea && exportBox) {
           exportArea.value = shareUrl;
@@ -1294,14 +1323,18 @@
       });
     }
 
-    btnSyncModal.addEventListener('click', () => {
-      syncModal.classList.add('active');
-      tryAutoFillImportInput();
-    });
+    if (btnSyncModal) {
+      btnSyncModal.addEventListener('click', () => {
+        if (syncModal) syncModal.classList.add('active');
+        tryAutoFillImportInput();
+      });
+    }
 
-    btnCloseSync.addEventListener('click', () => {
-      syncModal.classList.remove('active');
-    });
+    if (btnCloseSync) {
+      btnCloseSync.addEventListener('click', () => {
+        if (syncModal) syncModal.classList.remove('active');
+      });
+    }
 
     if (importCodeInput) {
       importCodeInput.addEventListener('focus', tryAutoFillImportInput);
@@ -1319,46 +1352,50 @@
         const decoded = decodeProgressState(cleanCode);
         if (decoded && mergeProgressData(decoded)) {
           alert('🎉 成功导入进度！所有做答与错题记录已全量更新。');
-          syncModal.classList.remove('active');
+          if (syncModal) syncModal.classList.remove('active');
         } else {
           alert('❌ 暗号/链接格式无效，请确认复制了完整的暗号或链接后再试！');
         }
       });
     }
 
-    btnCloudSyncNow.addEventListener('click', () => {
-      const key = cloudSyncKeyInput.value.trim();
-      if (!key) {
-        alert('请输入您的专属暗号！');
-        return;
-      }
-      practiceState.cloudSyncKey = key;
-      saveState();
-      autoCloudSync();
-    });
+    if (btnCloudSyncNow) {
+      btnCloudSyncNow.addEventListener('click', () => {
+        const key = cloudSyncKeyInput ? cloudSyncKeyInput.value.trim() : '';
+        if (!key) {
+          alert('请输入您的专属暗号！');
+          return;
+        }
+        practiceState.cloudSyncKey = key;
+        saveState();
+        autoCloudSync();
+      });
+    }
 
-    btnExportCode.addEventListener('click', () => {
-      const code = encodeProgressState();
-      const exportBox = document.getElementById('exportResultBox');
-      const exportArea = document.getElementById('exportTextarea');
-      const exportTitle = document.getElementById('exportResultTitle');
+    if (btnExportCode) {
+      btnExportCode.addEventListener('click', () => {
+        const code = encodeProgressState();
+        const exportBox = getEl('exportResultBox');
+        const exportArea = getEl('exportTextarea');
+        const exportTitle = getEl('exportResultTitle');
 
-      if (exportArea && exportBox) {
-        exportArea.value = code;
-        exportBox.style.display = 'block';
-      }
+        if (exportArea && exportBox) {
+          exportArea.value = code;
+          exportBox.style.display = 'block';
+        }
 
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(code).then(() => {
-          if (exportTitle) exportTitle.textContent = '✅ 进度暗号已复制到剪贴板！亦可点击下方框全选复制：';
-          alert('✅ 进度暗号已复制到剪贴板！\n如自动复制失败，弹窗下方已为您提供全选复制框。');
-        }).catch(() => {
-          if (exportTitle) exportTitle.textContent = '⚠️ 浏览器拦截了自动复制，请点击下方框【全选复制】：';
-        });
-      } else {
-        if (exportTitle) exportTitle.textContent = '⚠️ 请点击下方文本框【全选复制】您的暗号：';
-      }
-    });
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(code).then(() => {
+            if (exportTitle) exportTitle.textContent = '✅ 进度暗号已复制到剪贴板！亦可点击下方框全选复制：';
+            alert('✅ 进度暗号已复制到剪贴板！\n如自动复制失败，弹窗下方已为您提供全选复制框。');
+          }).catch(() => {
+            if (exportTitle) exportTitle.textContent = '⚠️ 浏览器拦截了自动复制，请点击下方框【全选复制】：';
+          });
+        } else {
+          if (exportTitle) exportTitle.textContent = '⚠️ 请点击下方文本框【全选复制】您的暗号：';
+        }
+      });
+    }
   }
 
 })();
