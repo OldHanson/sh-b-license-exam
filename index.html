@@ -19,9 +19,14 @@
         <div class="brand">
           <div class="brand-icon"><i class="fa-solid fa-graduation-cap"></i></div>
           <div class="brand-text">
-            <h1>项目负责人B证（复训）模拟考试</h1>
-            <span class="subtitle">全真模拟考场 · 1000题精选表格题库</span>
+            <h1 id="examHeaderTitle">项目负责人B证（复训）模拟考试</h1>
+            <span class="subtitle" id="examHeaderSubtitle">全真模拟考场 · 1000题精选表格题库</span>
           </div>
+          <select id="licenseSelect" class="license-select-dropdown" title="切换训练项目（A证/B证/C证）">
+            <option value="A">A证 · 主要负责人</option>
+            <option value="B" selected>B证 · 项目负责人</option>
+            <option value="C">C证 · 专职安全员C3</option>
+          </select>
         </div>
 
         <div class="header-right">
@@ -441,7 +446,9 @@
 
   <!-- Load Question Bank JS -->
   <script src="questions_bank.js?v=20260804_v2"></script>
+  <script src="questions_bank_a.js?v=20261126"></script>
+  <script src="questions_bank_c.js?v=20261126"></script>
   <!-- Load Main Application Logic JS -->
-  <script src="app.js?v=20260804_v2"></script>
+  <script src="app.js?v=20261126"></script>
 </body>
 </html>

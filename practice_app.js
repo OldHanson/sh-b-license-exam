@@ -6,7 +6,54 @@
 (function () {
   'use strict';
 
-  const STORAGE_KEY = 'b_license_practice_state';
+  const LICENSE_STORAGE_KEY = 'selected_license_type';
+  const LICENSE_CONFIGS = {
+    A: {
+      name: '主要负责人A证（复审）',
+      headerTitle: '主要负责人A证（复审）顺序刷题练习',
+      pageTitle: '主要负责人A证（复审）顺序刷题练习',
+      storageKey: 'a_license_practice_state',
+      getBank: () => window.QUESTION_BANK_A || []
+    },
+    B: {
+      name: '项目负责人B证（复训）',
+      headerTitle: '项目负责人B证（复训）顺序刷题练习',
+      pageTitle: '项目负责人B证（复训）顺序刷题练习',
+      storageKey: 'b_license_practice_state',
+      getBank: () => window.QUESTION_BANK || []
+    },
+    C: {
+      name: '专职安全员C3证（复训）',
+      headerTitle: '专职安全员C3证（复训）顺序刷题练习',
+      pageTitle: '专职安全员C3证（复训）顺序刷题练习',
+      storageKey: 'c_license_practice_state',
+      getBank: () => window.QUESTION_BANK_C || []
+    }
+  };
+
+  function resolveInitialLicense() {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const urlLic = (params.get('license') || '').toUpperCase();
+      if (LICENSE_CONFIGS[urlLic]) {
+        localStorage.setItem(LICENSE_STORAGE_KEY, urlLic);
+        return urlLic;
+      }
+    } catch (e) {}
+    try {
+      const saved = (localStorage.getItem(LICENSE_STORAGE_KEY) || '').toUpperCase();
+      if (LICENSE_CONFIGS[saved]) return saved;
+    } catch (e) {}
+    return 'B';
+  }
+
+  let currentLicense = resolveInitialLicense();
+
+  function getLicenseConfig() {
+    return LICENSE_CONFIGS[currentLicense] || LICENSE_CONFIGS.B;
+  }
+  function getStorageKey() { return getLicenseConfig().storageKey; }
+  function getActiveBank() { return getLicenseConfig().getBank(); }
 
   // Application State
   let practiceState = {
@@ -40,7 +87,8 @@
 
   // Ensure Question Bank is 100% loaded before initializing
   function ensureBankReady(callback) {
-    if (window.QUESTION_BANK && Array.isArray(window.QUESTION_BANK) && window.QUESTION_BANK.length > 0) {
+    const activeBank = getActiveBank();
+    if (Array.isArray(activeBank) && activeBank.length > 0) {
       callback();
       return;
     }
@@ -48,7 +96,8 @@
     let attempts = 0;
     const timer = setInterval(() => {
       attempts++;
-      if (window.QUESTION_BANK && Array.isArray(window.QUESTION_BANK) && window.QUESTION_BANK.length > 0) {
+      const bank = getActiveBank();
+      if (Array.isArray(bank) && bank.length > 0) {
         clearInterval(timer);
         callback();
       } else if (attempts >= 50) {
@@ -96,9 +145,50 @@
     } catch (e) {}
   }
 
+  function renderLicenseUI() {
+    const cfg = getLicenseConfig();
+    const totalCount = getActiveBank().length;
+    document.title = cfg.pageTitle;
+    const hTitle = getEl('practiceHeaderTitle');
+    const hSub = getEl('practiceHeaderSubtitle');
+    if (hTitle) hTitle.textContent = cfg.headerTitle;
+    if (hSub) hSub.textContent = `${totalCount}题全量题库 · 即时判分解析模式`;
+
+    const licSelect = getEl('licenseSelect');
+    if (licSelect) licSelect.value = currentLicense;
+
+    const examLink = document.querySelector('a[href^="index.html"]');
+    if (examLink) {
+      examLink.href = `index.html?license=${currentLicense}`;
+    }
+
+    const singleTabTitle = getEl('singleTabTitle');
+    const multiTabTitle = getEl('multiTabTitle');
+    const tfTabTitle = getEl('tfTabTitle');
+    if (singleTabTitle) singleTabTitle.textContent = `单选题板块 (${bankSingle.length}题)`;
+    if (multiTabTitle) multiTabTitle.textContent = `多选题板块 (${bankMultiple.length}题)`;
+    if (tfTabTitle) tfTabTitle.textContent = `判断题板块 (${bankTF.length}题)`;
+  }
+
+  function switchLicense(newLic) {
+    if (!LICENSE_CONFIGS[newLic]) return;
+    currentLicense = newLic;
+    safeSetItem(LICENSE_STORAGE_KEY, currentLicense);
+    wrongReviewAnswered = {};
+    tempMultiSelected = [];
+    loadBankData();
+    loadState();
+    renderLicenseUI();
+    switchCategory(practiceState.currentCategory || 'single');
+    updateAllProgressDisplays();
+    const keyInput = getEl('cloudSyncKey');
+    if (keyInput) keyInput.value = practiceState.cloudSyncKey || '';
+  }
+
   function init() {
     loadBankData();
     loadState();
+    renderLicenseUI();
     switchCategory(practiceState.currentCategory || 'single');
     updateAllProgressDisplays();
     setupEventListeners();
@@ -112,7 +202,7 @@
   }
 
   function loadBankData() {
-    const rawBank = window.QUESTION_BANK || [];
+    const rawBank = getActiveBank();
     bankSingle = rawBank.filter(q => q.category === 'single');
     bankMultiple = rawBank.filter(q => q.category === 'multiple');
     bankTF = rawBank.filter(q => q.category === 'tf');
@@ -144,7 +234,14 @@
   }
 
   function loadState() {
-    const saved = safeGetItem(STORAGE_KEY);
+    practiceState = {
+      answered: {},
+      currentCategory: 'single',
+      wrongFilter: 'all',
+      categoryPositions: { single: 0, multiple: 0, tf: 0, wrong: 0 },
+      cloudSyncKey: ''
+    };
+    const saved = safeGetItem(getStorageKey());
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -164,7 +261,7 @@
   }
 
   function saveState() {
-    safeSetItem(STORAGE_KEY, JSON.stringify(practiceState));
+    safeSetItem(getStorageKey(), JSON.stringify(practiceState));
   }
 
   function isQuestionInWrongSet(q, rec) {
@@ -190,7 +287,7 @@
   }
 
   function getWrongQuestionsList(filterOverride) {
-    const rawBank = window.QUESTION_BANK || [];
+    const rawBank = getActiveBank();
     const filter = filterOverride || practiceState.wrongFilter || 'all';
 
     const wrongList = rawBank.filter(q => {
@@ -718,10 +815,11 @@
     const totalAccuracyTextEl = getEl('totalAccuracyText');
 
     // Single Choice Tab Stats
+    const singleTotal = bankSingle.length;
     const singleAnsCount = bankSingle.filter(q => practiceState.answered[q.id]).length;
-    const singlePct = ((singleAnsCount / 400) * 100).toFixed(1);
+    const singlePct = singleTotal > 0 ? ((singleAnsCount / singleTotal) * 100).toFixed(1) : '0.0';
     if (singleFillEl) singleFillEl.style.width = `${singlePct}%`;
-    if (singleMetaEl) singleMetaEl.textContent = `已练 ${singleAnsCount} / 400 (${singlePct}%)`;
+    if (singleMetaEl) singleMetaEl.textContent = `已练 ${singleAnsCount} / ${singleTotal} (${singlePct}%)`;
 
     let singleCorrectCount = 0;
     let singleWrongCount = 0;
@@ -740,10 +838,11 @@
     if (singleWrongEl) singleWrongEl.textContent = `${singleWrongCount} (${singleWrongPct}%)`;
 
     // Multiple Choice Tab Stats (正确, 漏选, 错误)
+    const multiTotal = bankMultiple.length;
     const multiAnsCount = bankMultiple.filter(q => practiceState.answered[q.id]).length;
-    const multiPct = ((multiAnsCount / 200) * 100).toFixed(1);
+    const multiPct = multiTotal > 0 ? ((multiAnsCount / multiTotal) * 100).toFixed(1) : '0.0';
     if (multiFillEl) multiFillEl.style.width = `${multiPct}%`;
-    if (multiMetaEl) multiMetaEl.textContent = `已练 ${multiAnsCount} / 200 (${multiPct}%)`;
+    if (multiMetaEl) multiMetaEl.textContent = `已练 ${multiAnsCount} / ${multiTotal} (${multiPct}%)`;
 
     let multiCorrectCount = 0;
     let multiMissedCount = 0;
@@ -771,10 +870,11 @@
     if (multiWrongEl) multiWrongEl.textContent = `${multiWrongCount} (${multiWrongPct}%)`;
 
     // TF Choice Tab Stats
+    const tfTotal = bankTF.length;
     const tfAnsCount = bankTF.filter(q => practiceState.answered[q.id]).length;
-    const tfPct = ((tfAnsCount / 400) * 100).toFixed(1);
+    const tfPct = tfTotal > 0 ? ((tfAnsCount / tfTotal) * 100).toFixed(1) : '0.0';
     if (tfFillEl) tfFillEl.style.width = `${tfPct}%`;
-    if (tfMetaEl) tfMetaEl.textContent = `已练 ${tfAnsCount} / 400 (${tfPct}%)`;
+    if (tfMetaEl) tfMetaEl.textContent = `已练 ${tfAnsCount} / ${tfTotal} (${tfPct}%)`;
 
     let tfCorrectCount = 0;
     let tfWrongCount = 0;
@@ -824,8 +924,9 @@
     if (wrongCountTFEl) wrongCountTFEl.textContent = tfWrongList.length;
 
     // Overall Progress & Accuracy
-    const totalPct = ((totalAnsCount / 1000) * 100).toFixed(1);
-    if (totalProgressTextEl) totalProgressTextEl.textContent = `${totalAnsCount} / 1000 (${totalPct}%)`;
+    const totalBankCount = bankSingle.length + bankMultiple.length + bankTF.length;
+    const totalPct = totalBankCount > 0 ? ((totalAnsCount / totalBankCount) * 100).toFixed(1) : '0.0';
+    if (totalProgressTextEl) totalProgressTextEl.textContent = `${totalAnsCount} / ${totalBankCount} (${totalPct}%)`;
 
     let correctTotal = 0;
     Object.values(practiceState.answered).forEach(rec => {
@@ -944,7 +1045,7 @@
     // If parsed is in compact format v=2:
     if (parsed.v === 2 && parsed.a) {
       const rawBankMap = {};
-      (window.QUESTION_BANK || []).forEach(q => { rawBankMap[q.id] = q; });
+      getActiveBank().forEach(q => { rawBankMap[q.id] = q; });
 
       const answeredObj = {};
       Object.keys(parsed.a).forEach(qId => {
@@ -1108,6 +1209,13 @@
 
   // Event Listeners Setup
   function setupEventListeners() {
+    const licSelect = getEl('licenseSelect');
+    if (licSelect) {
+      licSelect.addEventListener('change', (e) => {
+        switchLicense(e.target.value);
+      });
+    }
+
     const catTabs = document.querySelectorAll('.cat-tab-btn');
     catTabs.forEach(tab => {
       tab.addEventListener('click', () => {

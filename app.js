@@ -8,8 +8,65 @@
 
   // Constants & Config
   const TOTAL_EXAM_TIME = 90 * 60; // 90 minutes in seconds
-  const EXAM_STATE_KEY = 'b_license_exam_state';
-  const EXAM_RECORDS_KEY = 'b_license_exam_records';
+  const LICENSE_STORAGE_KEY = 'selected_license_type';
+  const LICENSE_CONFIGS = {
+    A: {
+      name: '主要负责人A证（复审）',
+      headerTitle: '主要负责人A证（复审）模拟考试',
+      pageTitle: '主要负责人A证（复审）在线模拟考试系统',
+      stateKey: 'a_license_exam_state',
+      recordsKey: 'a_license_exam_records',
+      getBank: () => window.QUESTION_BANK_A || []
+    },
+    B: {
+      name: '项目负责人B证（复训）',
+      headerTitle: '项目负责人B证（复训）模拟考试',
+      pageTitle: '项目负责人B证（复训）在线模拟考试系统',
+      stateKey: 'b_license_exam_state',
+      recordsKey: 'b_license_exam_records',
+      getBank: () => window.QUESTION_BANK || []
+    },
+    C: {
+      name: '专职安全员C3证（复训）',
+      headerTitle: '专职安全员C3证（复训）模拟考试',
+      pageTitle: '专职安全员C3证（复训）在线模拟考试系统',
+      stateKey: 'c_license_exam_state',
+      recordsKey: 'c_license_exam_records',
+      getBank: () => window.QUESTION_BANK_C || []
+    }
+  };
+
+  function resolveInitialLicense() {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const urlLic = (params.get('license') || '').toUpperCase();
+      if (LICENSE_CONFIGS[urlLic]) {
+        localStorage.setItem(LICENSE_STORAGE_KEY, urlLic);
+        return urlLic;
+      }
+    } catch (e) {}
+    try {
+      const saved = (localStorage.getItem(LICENSE_STORAGE_KEY) || '').toUpperCase();
+      if (LICENSE_CONFIGS[saved]) return saved;
+    } catch (e) {}
+    return 'B';
+  }
+
+  let currentLicense = resolveInitialLicense();
+
+  function getLicenseConfig() {
+    return LICENSE_CONFIGS[currentLicense] || LICENSE_CONFIGS.B;
+  }
+  function getExamStateKey() { return getLicenseConfig().stateKey; }
+  function getExamRecordsKey() { return getLicenseConfig().recordsKey; }
+  function getActiveBank() { return getLicenseConfig().getBank(); }
+  function getMaxPapers() {
+    const bank = getActiveBank();
+    const sCount = Math.floor(bank.filter(q => q.category === 'single' || q.typeName === '单选题').length / 40);
+    const mCount = Math.floor(bank.filter(q => q.category === 'multiple' || q.typeName === '多选题').length / 20);
+    const tCount = Math.floor(bank.filter(q => q.category === 'tf' || q.typeName === '判断题').length / 40);
+    return Math.max(1, Math.min(sCount, mCount, tCount));
+  }
 
   // Application State
   let currentExam = {
@@ -36,6 +93,9 @@
   const answeredBadge = document.getElementById('answeredBadge');
   const recordCountBadge = document.getElementById('recordCountBadge');
   const paperSelect = document.getElementById('paperSelect');
+  const licenseSelect = document.getElementById('licenseSelect');
+  const examHeaderTitle = document.getElementById('examHeaderTitle');
+  const examHeaderSubtitle = document.getElementById('examHeaderSubtitle');
 
   // Question Card Elements
   const qNumTag = document.getElementById('qNumTag');
@@ -126,7 +186,8 @@
 
   // Ensure Question Bank is 100% loaded before initializing
   function ensureBankReady(callback) {
-    if (window.QUESTION_BANK && Array.isArray(window.QUESTION_BANK) && window.QUESTION_BANK.length > 0) {
+    const activeBank = getActiveBank();
+    if (Array.isArray(activeBank) && activeBank.length > 0) {
       callback();
       return;
     }
@@ -134,7 +195,8 @@
     let attempts = 0;
     const timer = setInterval(() => {
       attempts++;
-      if (window.QUESTION_BANK && Array.isArray(window.QUESTION_BANK) && window.QUESTION_BANK.length > 0) {
+      const bank = getActiveBank();
+      if (Array.isArray(bank) && bank.length > 0) {
         clearInterval(timer);
         callback();
       } else if (attempts >= 50) {
@@ -206,13 +268,34 @@
     } catch (e) {}
   }
 
-  function init() {
-    updateRecordCountBadge();
-    setupEventListeners();
-    checkUrlExamSyncParam();
+  function renderLicenseUI() {
+    const cfg = getLicenseConfig();
+    const totalCount = getActiveBank().length;
+    document.title = cfg.pageTitle;
+    if (examHeaderTitle) examHeaderTitle.textContent = cfg.headerTitle;
+    if (examHeaderSubtitle) examHeaderSubtitle.textContent = `全真模拟考场 · ${totalCount}题精选表格题库`;
+    if (licenseSelect) licenseSelect.value = currentLicense;
 
+    const practiceLink = document.querySelector('a[href^="顺序练习.html"]');
+    if (practiceLink) {
+      practiceLink.href = `顺序练习.html?license=${currentLicense}`;
+    }
+
+    if (paperSelect) {
+      const maxPapers = getMaxPapers();
+      paperSelect.innerHTML = '';
+      for (let i = 1; i <= maxPapers; i++) {
+        const opt = document.createElement('option');
+        opt.value = String(i);
+        opt.textContent = `模拟试卷 ${String(i).padStart(2, '0')}`;
+        paperSelect.appendChild(opt);
+      }
+    }
+  }
+
+  function loadOrStartLicenseExam() {
     let loadedState = false;
-    const savedState = safeGetItem(EXAM_STATE_KEY);
+    const savedState = safeGetItem(getExamStateKey());
 
     if (savedState) {
       try {
@@ -228,13 +311,36 @@
     }
 
     if (!loadedState) {
-      safeRemoveItem(EXAM_STATE_KEY);
+      safeRemoveItem(getExamStateKey());
       startNewExam(1);
     } else {
-      startTimer();
+      resultView.classList.remove('active');
+      examView.classList.add('active');
       renderCurrentQuestion();
       updateAnsweredCount();
     }
+    startTimer();
+  }
+
+  function switchLicense(newLic) {
+    if (!LICENSE_CONFIGS[newLic]) return;
+    currentLicense = newLic;
+    safeSetItem(LICENSE_STORAGE_KEY, currentLicense);
+    if (timerInterval) {
+      clearInterval(timerInterval);
+      timerInterval = null;
+    }
+    renderLicenseUI();
+    updateRecordCountBadge();
+    loadOrStartLicenseExam();
+  }
+
+  function init() {
+    renderLicenseUI();
+    updateRecordCountBadge();
+    setupEventListeners();
+    checkUrlExamSyncParam();
+    loadOrStartLicenseExam();
   }
 
   // Deterministic Seeded Shuffle Function (Fixed per paper)
@@ -255,15 +361,16 @@
     return arr;
   }
 
-  // Get fixed non-overlapping questions for paperNumber (1 to 10) with deterministic fixed shuffling
+  // Get fixed non-overlapping questions for paperNumber (1 to maxPapers) with deterministic fixed shuffling
   function getExamPaperQuestions(paperNum) {
-    const rawBank = window.QUESTION_BANK || [];
+    const rawBank = getActiveBank();
 
     const singles = rawBank.filter(q => q.category === 'single' || q.typeName === '单选题');
     const multiples = rawBank.filter(q => q.category === 'multiple' || q.typeName === '多选题');
     const tfs = rawBank.filter(q => q.category === 'tf' || q.typeName === '判断题');
 
-    const idx = Math.max(0, Math.min(9, paperNum - 1));
+    const maxPapers = getMaxPapers();
+    const idx = Math.max(0, Math.min(maxPapers - 1, paperNum - 1));
 
     // Partition non-overlapping sets for this paper
     const paperSingles = singles.slice(idx * 40, (idx + 1) * 40);
@@ -310,7 +417,7 @@
   }
 
   function saveState() {
-    safeSetItem(EXAM_STATE_KEY, JSON.stringify(currentExam));
+    safeSetItem(getExamStateKey(), JSON.stringify(currentExam));
   }
 
   // Timer Control Functions
@@ -460,7 +567,7 @@
       btnNextQ.disabled = currentIndex === currentExam.questions.length - 1;
     } catch (err) {
       console.error('Error rendering current question, recovering...', err);
-      localStorage.removeItem(EXAM_STATE_KEY);
+      localStorage.removeItem(getExamStateKey());
       startNewExam(1);
     }
   }
@@ -671,7 +778,7 @@
 
   function saveExamHistoryRecord(res) {
     let records = [];
-    const saved = safeGetItem(EXAM_RECORDS_KEY);
+    const saved = safeGetItem(getExamRecordsKey());
     if (saved) {
       try {
         records = JSON.parse(saved) || [];
@@ -690,12 +797,12 @@
     };
 
     records.unshift(record); // add to top
-    safeSetItem(EXAM_RECORDS_KEY, JSON.stringify(records));
+    safeSetItem(getExamRecordsKey(), JSON.stringify(records));
     updateRecordCountBadge();
   }
 
   function getExamRecords() {
-    const saved = safeGetItem(EXAM_RECORDS_KEY);
+    const saved = safeGetItem(getExamRecordsKey());
     if (!saved) return [];
     try {
       return JSON.parse(saved) || [];
@@ -1038,6 +1145,13 @@
 
   // Setup Event Listeners
   function setupEventListeners() {
+    // License Selector Change
+    if (licenseSelect) {
+      licenseSelect.addEventListener('change', (e) => {
+        switchLicense(e.target.value);
+      });
+    }
+
     // Paper Selector Change
     if (paperSelect) {
       paperSelect.addEventListener('change', (e) => {
@@ -1133,7 +1247,7 @@
     if (btnClearHistory) {
       btnClearHistory.addEventListener('click', () => {
         if (confirm('确定要清空所有历史考试记录与数据档案吗？此操作无法撤销。')) {
-          localStorage.removeItem(EXAM_RECORDS_KEY);
+          localStorage.removeItem(getExamRecordsKey());
           renderHistoryModal();
           updateRecordCountBadge();
         }
@@ -1433,7 +1547,7 @@
 
       // Sort by submit time descending
       existingRecords.sort((a, b) => (b.id || '').localeCompare(a.id || ''));
-      safeSetItem(EXAM_RECORDS_KEY, JSON.stringify(existingRecords));
+      safeSetItem(getExamRecordsKey(), JSON.stringify(existingRecords));
       updateRecordCountBadge();
     }
 

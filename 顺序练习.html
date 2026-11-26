@@ -19,9 +19,14 @@
         <div class="brand">
           <div class="brand-icon"><i class="fa-solid fa-book-open"></i></div>
           <div class="brand-text">
-            <h1>项目负责人B证（复训）顺序刷题练习</h1>
-            <span class="subtitle">1000题全量题库 · 即时判分解析模式</span>
+            <h1 id="practiceHeaderTitle">项目负责人B证（复训）顺序刷题练习</h1>
+            <span class="subtitle" id="practiceHeaderSubtitle">1000题全量题库 · 即时判分解析模式</span>
           </div>
+          <select id="licenseSelect" class="license-select-dropdown" title="切换训练项目（A证/B证/C证）">
+            <option value="A">A证 · 主要负责人</option>
+            <option value="B" selected>B证 · 项目负责人</option>
+            <option value="C">C证 · 专职安全员C3</option>
+          </select>
         </div>
 
         <div class="header-right">
@@ -60,7 +65,7 @@
           <button class="cat-tab-btn active" data-cat="single">
             <div class="tab-header">
               <i class="fa-regular fa-circle-dot"></i>
-              <span>单选题板块 (400题)</span>
+              <span id="singleTabTitle">单选题板块 (400题)</span>
             </div>
             <div class="tab-progress-bar">
               <div class="fill" id="singleFill" style="width: 0%;"></div>
@@ -79,7 +84,7 @@
           <button class="cat-tab-btn" data-cat="multiple">
             <div class="tab-header">
               <i class="fa-regular fa-square-check"></i>
-              <span>多选题板块 (200题)</span>
+              <span id="multiTabTitle">多选题板块 (200题)</span>
             </div>
             <div class="tab-progress-bar">
               <div class="fill" id="multiFill" style="width: 0%;"></div>
@@ -101,7 +106,7 @@
           <button class="cat-tab-btn" data-cat="tf">
             <div class="tab-header">
               <i class="fa-solid fa-scale-balanced"></i>
-              <span>判断题板块 (400题)</span>
+              <span id="tfTabTitle">判断题板块 (400题)</span>
             </div>
             <div class="tab-progress-bar">
               <div class="fill" id="tfFill" style="width: 0%;"></div>
@@ -307,6 +312,8 @@
 
   <!-- Load Question Bank JS & Practice App JS -->
   <script src="questions_bank.js?v=20260807_v7"></script>
-  <script src="practice_app.js?v=20260807_v7"></script>
+  <script src="questions_bank_a.js?v=20261126"></script>
+  <script src="questions_bank_c.js?v=20261126"></script>
+  <script src="practice_app.js?v=20261126"></script>
 </body>
 </html>

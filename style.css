@@ -100,6 +100,26 @@ body {
   color: var(--text-muted);
 }
 
+.license-select-dropdown {
+  margin-left: 8px;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--primary);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--primary);
+  background-color: #eff6ff;
+  outline: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.license-select-dropdown:hover,
+.license-select-dropdown:focus {
+  background-color: #dbeafe;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
 .header-right {
   display: flex;
   align-items: center;
